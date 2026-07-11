@@ -37,6 +37,7 @@ import io.nekohasekai.sfa.compose.screen.settings.RemoteControlScreen
 import io.nekohasekai.sfa.compose.screen.settings.ServiceSettingsScreen
 import io.nekohasekai.sfa.compose.screen.settings.SettingsScreen
 import io.nekohasekai.sfa.compose.screen.settings.TailscaleFontPickerScreen
+import io.nekohasekai.sfa.compose.screen.settings.ViphoonSettingsScreen
 import io.nekohasekai.sfa.compose.screen.settings.TailscaleTerminalConfigScreen
 import io.nekohasekai.sfa.compose.screen.settings.TailscaleThemePickerScreen
 import io.nekohasekai.sfa.compose.screen.tools.CrashReportDetailScreen
@@ -504,6 +505,16 @@ fun SFANavHost(
         }
 
         // Settings subscreens with slide animations
+        composable(
+            route = "settings/viphoon",
+            enterTransition = slideInFromRight,
+            exitTransition = slideOutToLeft,
+            popEnterTransition = slideInFromLeft,
+            popExitTransition = slideOutToRight,
+        ) {
+            ViphoonSettingsScreen(navController = navController, serviceStatus = serviceStatus)
+        }
+
         composable(
             route = "settings/app",
             enterTransition = slideInFromRight,

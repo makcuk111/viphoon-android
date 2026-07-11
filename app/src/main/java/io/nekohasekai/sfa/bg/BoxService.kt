@@ -35,6 +35,7 @@ import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.ktx.hasPermission
+import io.nekohasekai.sfa.utils.ConfigTweaks
 import io.nekohasekai.sfa.vendor.Vendor
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -119,11 +120,12 @@ class BoxService(private val service: Service, private val platformInterface: Pl
                 return
             }
 
-            val content = File(profile.typed.path).readText()
+            var content = File(profile.typed.path).readText()
             if (content.isBlank()) {
                 stopAndAlert(Alert.EmptyConfiguration)
                 return
             }
+            content = ConfigTweaks.apply(content)
 
             lastProfileName = profile.name
             withContext(Dispatchers.Main) {
@@ -208,11 +210,12 @@ class BoxService(private val service: Service, private val platformInterface: Pl
             return
         }
 
-        val content = File(profile.typed.path).readText()
+        var content = File(profile.typed.path).readText()
         if (content.isBlank()) {
             stopAndAlert(Alert.EmptyConfiguration)
             return
         }
+        content = ConfigTweaks.apply(content)
         lastProfileName = profile.name
         try {
             commandServer.startOrReloadService(

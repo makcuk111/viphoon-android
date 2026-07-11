@@ -26,6 +26,14 @@ object SettingsKey {
     const val ALLOW_BYPASS = "allow_bypass"
     const val SYSTEM_PROXY_ENABLED = "system_proxy_enabled"
 
+    // ViPhooN: обход блокировок и маршрутизация (как в десктоп-клиенте)
+    const val VIPHOON_TLS_RECORD_FRAGMENT = "viphoon_tls_record_fragment"
+    const val VIPHOON_TLS_FRAGMENT = "viphoon_tls_fragment"
+    const val VIPHOON_MUX_ENABLED = "viphoon_mux_enabled"
+    const val VIPHOON_MUX_MAX_STREAMS = "viphoon_mux_max_streams"
+    const val VIPHOON_ROUTE_MODE = "viphoon_route_mode"
+    const val VIPHOON_SITE_LIST = "viphoon_site_list"
+
     const val PRIVILEGE_SETTINGS_ENABLED = "hide_settings_enabled"
     const val PRIVILEGE_SETTINGS_LIST = "hide_settings_list"
     const val PRIVILEGE_SETTINGS_INTERFACE_RENAME_ENABLED = "hide_settings_interface_rename_enabled"

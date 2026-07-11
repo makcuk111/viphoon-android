@@ -100,6 +100,19 @@ object Settings {
     var allowBypass by dataStore.boolean(SettingsKey.ALLOW_BYPASS) { false }
     var systemProxyEnabled by dataStore.boolean(SettingsKey.SYSTEM_PROXY_ENABLED) { true }
 
+    // ViPhooN: обход блокировок и маршрутизация по сайтам (как в десктоп-клиенте)
+    const val ROUTE_MODE_ALL = "all"
+    const val ROUTE_MODE_EXCLUDE = "exclude"
+    const val ROUTE_MODE_ONLY = "only"
+    const val MAX_SITE_LIST = 100
+
+    var viphoonTlsRecordFragment by dataStore.boolean(SettingsKey.VIPHOON_TLS_RECORD_FRAGMENT) { false }
+    var viphoonTlsFragment by dataStore.boolean(SettingsKey.VIPHOON_TLS_FRAGMENT) { false }
+    var viphoonMuxEnabled by dataStore.boolean(SettingsKey.VIPHOON_MUX_ENABLED) { false }
+    var viphoonMuxMaxStreams by dataStore.int(SettingsKey.VIPHOON_MUX_MAX_STREAMS) { 4 }
+    var viphoonRouteMode by dataStore.string(SettingsKey.VIPHOON_ROUTE_MODE) { ROUTE_MODE_ALL }
+    var viphoonSiteList by dataStore.stringSet(SettingsKey.VIPHOON_SITE_LIST) { emptySet() }
+
     var privilegeSettingsEnabled by dataStore.boolean(SettingsKey.PRIVILEGE_SETTINGS_ENABLED) { false }
     var privilegeSettingsList by dataStore.stringSet(SettingsKey.PRIVILEGE_SETTINGS_LIST) { emptySet() }
     var privilegeSettingsInterfaceRenameEnabled by dataStore.boolean(

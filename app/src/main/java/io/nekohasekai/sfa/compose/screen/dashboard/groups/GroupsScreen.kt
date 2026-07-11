@@ -56,6 +56,7 @@ import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.model.Group
 import io.nekohasekai.sfa.compose.model.GroupItem
+import io.nekohasekai.sfa.compose.model.sectionize
 import io.nekohasekai.sfa.constant.Status
 
 @Composable
@@ -295,6 +296,56 @@ private fun ProxyGroupCard(
 
 @Composable
 private fun ProxyItemsList(items: List<GroupItem>, selectedTag: String, isSelectable: Boolean, onItemSelected: (String) -> Unit) {
+    // Ноды раскладываем по смысловым секциям, как в десктоп-клиенте ViPhooN
+    val sections =
+        remember(items) {
+            sectionize(items)
+        }
+    val showHeaders = sections.size > 1
+
+    Column(
+        modifier =
+        Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        sections.forEach { (section, sectionItems) ->
+            if (showHeaders) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = section.title,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    section.hint?.let { hint ->
+                        Text(
+                            text = hint,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            ProxySectionGrid(
+                items = sectionItems,
+                selectedTag = selectedTag,
+                isSelectable = isSelectable,
+                onItemSelected = onItemSelected,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProxySectionGrid(items: List<GroupItem>, selectedTag: String, isSelectable: Boolean, onItemSelected: (String) -> Unit) {
     // Cache the chunked items to avoid re-chunking on every recomposition
     val itemsPerRow = 2
     val chunkedItems =
@@ -304,10 +355,7 @@ private fun ProxyItemsList(items: List<GroupItem>, selectedTag: String, isSelect
 
     // Use Column with Rows for better control over item sizing
     Column(
-        modifier =
-        Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         chunkedItems.forEach { rowItems ->

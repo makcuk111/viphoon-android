@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SettingsRemote
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
@@ -93,6 +94,37 @@ fun SettingsScreen(navController: NavController) {
                 ListItem(
                     headlineContent = {
                         Text(
+                            "ViPhooN: обход и маршрутизация",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            "Фрагментация TLS, мультиплексор, сайты",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            imageVector = Icons.Outlined.Shield,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    },
+                    modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                        .clickable { navController.navigate("settings/viphoon") },
+                    colors =
+                    ListItemDefaults.colors(
+                        containerColor = Color.Transparent,
+                    ),
+                )
+
+                ListItem(
+                    headlineContent = {
+                        Text(
                             stringResource(R.string.title_app_settings),
                             style = MaterialTheme.typography.bodyLarge,
                         )
@@ -111,7 +143,6 @@ fun SettingsScreen(navController: NavController) {
                     },
                     modifier =
                     Modifier
-                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
                         .clickable { navController.navigate("settings/app") },
                     colors =
                     ListItemDefaults.colors(
@@ -334,7 +365,7 @@ fun SettingsScreen(navController: NavController) {
                 ListItem(
                     headlineContent = {
                         Text(
-                            stringResource(R.string.sponsor),
+                            "Канал ViPhooN",
                             style = MaterialTheme.typography.bodyLarge,
                         )
                     },
@@ -357,7 +388,7 @@ fun SettingsScreen(navController: NavController) {
                         .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
                         .clickable {
                             val intent = android.content.Intent(android.content.Intent.ACTION_VIEW)
-                            intent.data = android.net.Uri.parse("https://sekai.icu/sponsors/")
+                            intent.data = android.net.Uri.parse("https://t.me/viphoon_channel")
                             context.startActivity(intent)
                         },
                     colors =

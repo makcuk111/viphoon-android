@@ -2,10 +2,17 @@ package io.nekohasekai.sfa.compose.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Primary colors from existing app
-val SingBoxPrimary = Color(0xFFD81B60)
-val SingBoxPrimaryDark = Color(0xFFA00037)
-val SingBoxPrimaryLight = Color(0xFFFF5C8D)
+// ViPhooN brand colors (совпадают с десктоп-клиентом: неон #1fe07a на графите)
+val ViphoonNeon = Color(0xFF1FE07A)
+val ViphoonNeonDark = Color(0xFF14A85A)
+val ViphoonNeonLight = Color(0xFF6FF0A8)
+val ViphoonBgDark = Color(0xFF0E1517)
+val ViphoonSurfaceDark = Color(0xFF151F22)
+
+// Aliases, чтобы не трогать остальной код форка
+val SingBoxPrimary = ViphoonNeon
+val SingBoxPrimaryDark = ViphoonNeonDark
+val SingBoxPrimaryLight = ViphoonNeonLight
 
 // Service status colors
 val ServiceRunning = Color(0xFF4CAF50)
@@ -23,7 +30,7 @@ val LogBlueLight = Color(0xFF00A6B2)
 val LogWhite = Color(0xFFECECEC)
 
 // Material You seed color
-val SeedColor = Color(0xFFD81B60)
+val SeedColor = ViphoonNeon
 
 // Additional semantic colors
 val SuccessGreen = Color(0xFF4CAF50)
