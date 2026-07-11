@@ -1,0 +1,104 @@
+name: Build ViPhooN APK
+
+# Собирает APK ViPhooN:
+#  1) собирает libbox.aar / libbox-legacy.aar из исходников sing-box (gomobile + NDK)
+#  2) кладёт их в app/libs
+#  3) ассемблит debug-APK (самоподписанный, ставится сайдлоадом)
+#
+# Готовый APK — во вкладке Actions -> запуск -> Artifacts -> viphoon-apk.
+#
+# sing_box_ref подбирается под версию SFA (см. version.properties). Если сборка
+# libbox падает на несовместимости API — поменяй sing_box_ref на соседний тег/коммит.
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      sing_box_ref:
+        description: "git ref (tag/branch/commit) репозитория SagerNet/sing-box для сборки libbox"
+        required: true
+        default: "dev-next"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      SING_BOX_REF: ${{ github.event.inputs.sing_box_ref || 'dev-next' }}
+    steps:
+      - name: Checkout ViPhooN (с сабмодулями)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Прочитать GO_VERSION из version.properties
+        id: props
+        run: |
+          go_version="$(grep '^GO_VERSION=' version.properties | cut -d= -f2 | sed 's/^go//')"
+          echo "go_version=${go_version:-1.25.11}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.props.outputs.go_version }}
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Установить NDK
+        run: |
+          set -e
+          sdkmanager "ndk;28.0.13004108"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.0.13004108" >> "$GITHUB_ENV"
+
+      - name: Клонировать sing-box (${{ env.SING_BOX_REF }})
+        run: git clone --depth 1 --branch "$SING_BOX_REF" https://github.com/SagerNet/sing-box.git sing-box-src || git clone https://github.com/SagerNet/sing-box.git sing-box-src
+
+      - name: Собрать libbox.aar (gomobile)
+        working-directory: sing-box-src
+        run: |
+          set -e
+          if [ -n "$SING_BOX_REF" ]; then git checkout "$SING_BOX_REF" || true; fi
+          # Установить gomobile/gobind (форк sagernet, как в Makefile sing-box)
+          make lib_install || {
+            go install -v github.com/sagernet/gomobile/cmd/gomobile@latest
+            go install -v github.com/sagernet/gomobile/cmd/gobind@latest
+          }
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          make lib_android
+
+      - name: Разложить AAR в app/libs
+        run: |
+          set -e
+          mkdir -p app/libs
+          find sing-box-src -maxdepth 2 -name 'libbox*.aar' -exec cp -v {} app/libs/ \;
+          ls -lh app/libs/
+
+      - name: Сборка APK (otherDebug, universal)
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleOtherDebug --no-daemon --stacktrace
+
+      - name: Собрать APK в один каталог
+        run: |
+          mkdir -p out
+          find app/build/outputs/apk -name '*.apk' -exec cp -v {} out/ \;
+          ls -lh out/
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: viphoon-apk
+          path: out/*.apk
+          if-no-files-found: error
