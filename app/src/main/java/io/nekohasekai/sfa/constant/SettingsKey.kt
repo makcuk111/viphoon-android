@@ -33,6 +33,8 @@ object SettingsKey {
     const val VIPHOON_MUX_MAX_STREAMS = "viphoon_mux_max_streams"
     const val VIPHOON_ROUTE_MODE = "viphoon_route_mode"
     const val VIPHOON_SITE_LIST = "viphoon_site_list"
+    const val VIPHOON_APP_THEME = "viphoon_app_theme"
+    const val VIPHOON_SELECTED_NODE = "viphoon_selected_node"
 
     const val PRIVILEGE_SETTINGS_ENABLED = "hide_settings_enabled"
     const val PRIVILEGE_SETTINGS_LIST = "hide_settings_list"

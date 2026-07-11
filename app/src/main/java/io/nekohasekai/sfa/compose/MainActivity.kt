@@ -120,6 +120,7 @@ import io.nekohasekai.sfa.compose.screen.tools.TailscaleSSHSharedViewModel
 import io.nekohasekai.sfa.compose.screen.tools.TailscaleStatusViewModel
 import io.nekohasekai.sfa.compose.screen.usbip.USBIPStatusViewModel
 import io.nekohasekai.sfa.compose.theme.SFATheme
+import io.nekohasekai.sfa.compose.theme.ThemeState
 import io.nekohasekai.sfa.compose.topbar.LocalTopBarController
 import io.nekohasekai.sfa.compose.topbar.TopBarController
 import io.nekohasekai.sfa.compose.topbar.TopBarEntry
@@ -220,7 +221,14 @@ class MainActivity :
         handleIntent(intent)
 
         setContent {
-            SFATheme {
+            val themeMode by ThemeState.mode
+            SFATheme(
+                darkTheme = when (themeMode) {
+                    Settings.THEME_LIGHT -> false
+                    Settings.THEME_SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+                    else -> true
+                },
+            ) {
                 SFAApp()
             }
         }

@@ -15,8 +15,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Favorite
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SettingsRemote
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -35,13 +38,19 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -50,6 +59,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import io.nekohasekai.sfa.R
+import io.nekohasekai.sfa.compose.theme.ThemeState
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.update.UpdateState
@@ -83,6 +93,51 @@ fun SettingsScreen(navController: NavController) {
         HookStatusClient.refresh()
     }
 
+    var showThemeDialog by remember { mutableStateOf(false) }
+    val themeMode by ThemeState.mode
+    if (showThemeDialog) {
+        val options = listOf(
+            Settings.THEME_DARK to "Тёмная",
+            Settings.THEME_LIGHT to "Светлая",
+            Settings.THEME_SYSTEM to "Как в системе",
+        )
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            title = { Text("Тема приложения") },
+            text = {
+                Column {
+                    options.forEach { (value, label) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    ThemeState.set(value)
+                                    showThemeDialog = false
+                                },
+                        ) {
+                            RadioButton(
+                                selected = themeMode == value,
+                                onClick = {
+                                    ThemeState.set(value)
+                                    showThemeDialog = false
+                                },
+                            )
+                            Text(label, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showThemeDialog = false }) {
+                    Text(stringResource(R.string.ok))
+                }
+            },
+        )
+    }
+
     Column(
         modifier =
         Modifier
@@ -91,6 +146,50 @@ fun SettingsScreen(navController: NavController) {
             .verticalScroll(rememberScrollState())
             .padding(vertical = 8.dp),
     ) {
+        // Внешний вид
+        Card(
+            modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            ),
+        ) {
+            ListItem(
+                headlineContent = {
+                    Text(
+                        "Тема приложения",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        when (themeMode) {
+                            Settings.THEME_LIGHT -> "Светлая"
+                            Settings.THEME_SYSTEM -> "Как в системе"
+                            else -> "Тёмная"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Outlined.DarkMode,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                },
+                modifier =
+                Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { showThemeDialog = true },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+        }
+
         // General Settings Group
         Card(
             modifier =

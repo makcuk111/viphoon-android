@@ -2,6 +2,8 @@ package io.nekohasekai.sfa.compose.screen.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.nekohasekai.sfa.database.Settings
+import io.nekohasekai.sfa.utils.NodeCatalog
 import io.nekohasekai.sfa.utils.SubscriptionInfo
 import io.nekohasekai.sfa.utils.SubscriptionInfoFetcher
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +48,43 @@ class HomeViewModel : ViewModel() {
                 info = info ?: _subscription.value.info,
                 loadedForUrl = remoteURL,
             )
+        }
+    }
+
+    // Офлайн-каталог нод из файла конфига: список локаций доступен
+    // и при выключенном VPN (как в Happ и десктоп-клиенте).
+    private val _catalog = MutableStateFlow<NodeCatalog.Catalog?>(null)
+    val catalog = _catalog.asStateFlow()
+
+    private var catalogPath: String? = null
+
+    fun loadCatalog(configPath: String?) {
+        if (configPath.isNullOrBlank()) {
+            catalogPath = null
+            _catalog.value = null
+            return
+        }
+        if (catalogPath == configPath && _catalog.value != null) return
+        catalogPath = configPath
+        viewModelScope.launch {
+            _catalog.value = withContext(Dispatchers.IO) { NodeCatalog.fromConfigFile(configPath) }
+        }
+    }
+
+    // Выбранная нода, сохранённая в настройках (актуальна при выключенном VPN).
+    private val _storedNode = MutableStateFlow("")
+    val storedNode = _storedNode.asStateFlow()
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            _storedNode.value = Settings.viphoonSelectedNode
+        }
+    }
+
+    fun rememberNodeSelection(tag: String) {
+        _storedNode.value = tag
+        viewModelScope.launch(Dispatchers.IO) {
+            Settings.viphoonSelectedNode = tag
         }
     }
 }

@@ -113,6 +113,15 @@ object Settings {
     var viphoonRouteMode by dataStore.string(SettingsKey.VIPHOON_ROUTE_MODE) { ROUTE_MODE_ALL }
     var viphoonSiteList by dataStore.stringSet(SettingsKey.VIPHOON_SITE_LIST) { emptySet() }
 
+    // Тема приложения: тёмная по умолчанию (как в десктоп-клиенте)
+    const val THEME_DARK = "dark"
+    const val THEME_LIGHT = "light"
+    const val THEME_SYSTEM = "system"
+    var viphoonAppTheme by dataStore.string(SettingsKey.VIPHOON_APP_THEME) { THEME_DARK }
+
+    // Последняя выбранная нода (для показа и выбора локации при выключенном VPN)
+    var viphoonSelectedNode by dataStore.string(SettingsKey.VIPHOON_SELECTED_NODE) { "" }
+
     var privilegeSettingsEnabled by dataStore.boolean(SettingsKey.PRIVILEGE_SETTINGS_ENABLED) { false }
     var privilegeSettingsList by dataStore.stringSet(SettingsKey.PRIVILEGE_SETTINGS_LIST) { emptySet() }
     var privilegeSettingsInterfaceRenameEnabled by dataStore.boolean(

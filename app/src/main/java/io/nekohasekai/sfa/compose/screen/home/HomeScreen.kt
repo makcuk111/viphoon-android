@@ -18,16 +18,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Power
-import androidx.compose.material.icons.outlined.AddLink
-import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -57,12 +61,25 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.compose.model.Group
 import io.nekohasekai.sfa.compose.screen.dashboard.DashboardViewModel
-import io.nekohasekai.sfa.compose.screen.dashboard.groups.GroupsScreen
 import io.nekohasekai.sfa.compose.screen.dashboard.groups.GroupsViewModel
 import io.nekohasekai.sfa.constant.Status
+import io.nekohasekai.sfa.utils.NodeCatalog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private val BYPASS_REGEX = Regex("обход|bypass|white|бел[ыо]|lte", RegexOption.IGNORE_CASE)
+
+// Строка списка локаций (плоский список, как в Happ и десктоп-клиенте).
+private data class NodeRow(
+    val tag: String,
+    val name: String,
+    val flag: String?,
+    val subtitle: String?,
+    val delay: Int,
+    val isSelected: Boolean,
+    val isAuto: Boolean,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,22 +94,48 @@ fun HomeScreen(
     val dashboardUiState by dashboardViewModel.uiState.collectAsState()
     val groupsUiState by groupsViewModel.uiState.collectAsState()
     val subscription by homeViewModel.subscription.collectAsState()
+    val catalog by homeViewModel.catalog.collectAsState()
+    val storedNode by homeViewModel.storedNode.collectAsState()
 
     val hasProfile = dashboardUiState.selectedProfileId != -1L
-    val remoteURL = remember(dashboardUiState.profiles, dashboardUiState.selectedProfileId) {
-        dashboardUiState.profiles
-            .firstOrNull { it.id == dashboardUiState.selectedProfileId }
-            ?.typed?.remoteURL
-            ?.takeIf { it.isNotBlank() }
+    val selectedProfile = remember(dashboardUiState.profiles, dashboardUiState.selectedProfileId) {
+        dashboardUiState.profiles.firstOrNull { it.id == dashboardUiState.selectedProfileId }
     }
+    val remoteURL = selectedProfile?.typed?.remoteURL?.takeIf { it.isNotBlank() }
 
     LaunchedEffect(remoteURL) {
         homeViewModel.ensureLoaded(remoteURL)
     }
+    LaunchedEffect(selectedProfile?.typed?.path) {
+        homeViewModel.loadCatalog(selectedProfile?.typed?.path)
+    }
+
+    // Главная группа — селектор из конфига (обычно «🎛 ViPhooN»)
+    val mainGroup = remember(groupsUiState.groups) {
+        groupsUiState.groups.firstOrNull { it.type.equals("selector", ignoreCase = true) }
+            ?: groupsUiState.groups.firstOrNull { it.selectable }
+    }
+    val online = mainGroup != null
+
+    // Синхронизация выбранной ноды: выбор, сделанный при выключенном VPN,
+    // применяется после старта; актуальный выбор запоминается для офлайна.
+    LaunchedEffect(mainGroup?.tag, mainGroup?.selected, storedNode) {
+        val group = mainGroup ?: return@LaunchedEffect
+        if (storedNode.isNotEmpty() &&
+            storedNode != group.selected &&
+            group.items.any { it.tag == storedNode }
+        ) {
+            groupsViewModel.selectGroupItem(group.tag, storedNode)
+        } else if (group.selected.isNotEmpty() && group.selected != storedNode) {
+            homeViewModel.rememberNodeSelection(group.selected)
+        }
+    }
 
     var showNodeSheet by remember { mutableStateOf(false) }
 
-    val currentNode = remember(groupsUiState.groups) { pickCurrentNode(groupsUiState.groups) }
+    val currentNode = remember(groupsUiState.groups, catalog, storedNode) {
+        pickCurrentNode(groupsUiState.groups, catalog, storedNode)
+    }
 
     Column(
         modifier = Modifier
@@ -107,14 +150,15 @@ fun HomeScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        SubscriptionRow(
-            hasProfile = hasProfile,
-            profileName = dashboardUiState.selectedProfileName,
-            loading = subscription.loading,
-            onRefresh = {
-                if (remoteURL != null) homeViewModel.refresh(remoteURL) else onOpenAddSubscription()
-            },
-        )
+        if (hasProfile) {
+            SubscriptionRow(
+                profileName = dashboardUiState.selectedProfileName,
+                loading = subscription.loading,
+                onRefresh = { homeViewModel.refresh(remoteURL) },
+            )
+        } else {
+            AddSubscriptionBanner(onClick = onOpenAddSubscription)
+        }
 
         Spacer(Modifier.weight(1f))
 
@@ -138,9 +182,8 @@ fun HomeScreen(
         }
 
         CurrentNodeBar(
-            nodeName = currentNode?.name,
-            delay = currentNode?.delay ?: 0,
-            enabled = groupsUiState.groups.isNotEmpty(),
+            node = currentNode,
+            enabled = online || catalog != null,
             onClick = { showNodeSheet = true },
         )
 
@@ -148,6 +191,9 @@ fun HomeScreen(
     }
 
     if (showNodeSheet) {
+        val rows = remember(mainGroup, catalog, storedNode) {
+            buildNodeRows(mainGroup, catalog, storedNode)
+        }
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { showNodeSheet = false },
@@ -156,32 +202,214 @@ fun HomeScreen(
             contentColor = MaterialTheme.colorScheme.onSurface,
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Локации",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(start = 24.dp, top = 4.dp, bottom = 8.dp),
-                )
-                GroupsScreen(
-                    serviceStatus = serviceStatus,
-                    viewModel = groupsViewModel,
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Локации",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (online) {
+                        IconButton(onClick = { mainGroup?.let { groupsViewModel.urlTest(it.tag) } }) {
+                            Icon(
+                                imageVector = Icons.Filled.Speed,
+                                contentDescription = "Проверить пинг",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+                if (!online) {
+                    Text(
+                        text = "VPN выключен — пинг появится после подключения",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(520.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 4.dp,
+                        bottom = 24.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(rows, key = { it.tag }) { row ->
+                        NodeRowItem(
+                            row = row,
+                            onClick = {
+                                mainGroup?.let { groupsViewModel.selectGroupItem(it.tag, row.tag) }
+                                homeViewModel.rememberNodeSelection(row.tag)
+                                showNodeSheet = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Плоский список: автовыбор первым, дальше все локации в порядке подписки.
+private fun buildNodeRows(mainGroup: Group?, catalog: NodeCatalog.Catalog?, storedNode: String): List<NodeRow> {
+    data class RawNode(val tag: String, val type: String, val delay: Int)
+
+    val raw: List<RawNode>
+    val selectedTag: String
+    if (mainGroup != null) {
+        raw = mainGroup.items
+            .filter { it.type != "direct" && it.type != "block" }
+            .map { RawNode(it.tag, it.type, it.urlTestDelay) }
+        selectedTag = mainGroup.selected
+    } else if (catalog != null) {
+        raw = catalog.nodes.map { RawNode(it.tag, it.type, 0) }
+        selectedTag = storedNode
+    } else {
+        return emptyList()
+    }
+
+    val rows = raw.map { node ->
+        val isAuto = NodeCatalog.isAuto(node.type)
+        val subtitle = when {
+            isAuto -> "лучший сервер по пингу"
+            BYPASS_REGEX.containsMatchIn(node.tag) -> "обход белых списков · трафик из лимита"
+            NodeCatalog.isHysteria(node.type) -> "Hysteria2 · устойчив к блокировкам"
+            else -> null
+        }
+        NodeRow(
+            tag = node.tag,
+            name = if (isAuto) "Автовыбор" else NodeCatalog.cleanName(node.tag).ifBlank { node.tag },
+            flag = if (isAuto) null else NodeCatalog.flagFor(node.tag),
+            subtitle = subtitle,
+            delay = node.delay,
+            isSelected = if (selectedTag.isNotEmpty()) node.tag == selectedTag else isAuto,
+            isAuto = isAuto,
+        )
+    }
+    return rows.sortedByDescending { it.isAuto }
+}
+
+@Composable
+private fun NodeRowItem(row: NodeRow, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = if (row.isSelected) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        },
+        border = if (row.isSelected) {
+            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+        } else {
+            null
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (row.isAuto) {
+                Icon(
+                    imageVector = Icons.Filled.Bolt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp),
+                )
+            } else {
+                Text(text = row.flag ?: "🌐", fontSize = 22.sp)
+            }
+            Spacer(Modifier.size(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = row.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (row.isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                row.subtitle?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (row.delay > 0) {
+                Text(
+                    text = "${row.delay} ms",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = latencyColorFor(row.delay),
+                )
+                Spacer(Modifier.size(10.dp))
+            }
+            if (row.isSelected) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
     }
 }
 
-private data class CurrentNode(val name: String, val delay: Int)
+private data class CurrentNode(val title: String, val flag: String?, val isAuto: Boolean, val delay: Int)
 
-// Текущая нода = выбранный аутбаунд основной группы-селектора (или первой группы).
-private fun pickCurrentNode(groups: List<Group>): CurrentNode? {
-    val group = groups.firstOrNull { it.selectable } ?: groups.firstOrNull() ?: return null
-    val selected = group.selected.ifBlank { return null }
-    val delay = group.items.firstOrNull { it.tag == selected }?.urlTestDelay ?: 0
-    return CurrentNode(selected, delay)
+// Текущая локация: при работающем VPN — из групп (автовыбор раскрывается до
+// реальной ноды), при выключенном — из сохранённого выбора и офлайн-каталога.
+private fun pickCurrentNode(groups: List<Group>, catalog: NodeCatalog.Catalog?, storedNode: String): CurrentNode? {
+    val group = groups.firstOrNull { it.type.equals("selector", ignoreCase = true) }
+        ?: groups.firstOrNull { it.selectable }
+    if (group != null && group.selected.isNotBlank()) {
+        var tag = group.selected
+        var delay = group.items.firstOrNull { it.tag == tag }?.urlTestDelay ?: 0
+        // выбран «Автовыбор» (urltest) — показываем ноду, которую он выбрал
+        val inner = groups.firstOrNull { it.tag == tag && it.tag != group.tag }
+        val isAuto = inner != null ||
+            group.items.firstOrNull { it.tag == tag }?.type?.let(NodeCatalog::isAuto) == true
+        if (inner != null && inner.selected.isNotBlank()) {
+            tag = inner.selected
+            delay = inner.items.firstOrNull { it.tag == tag }?.urlTestDelay ?: delay
+        }
+        return if (isAuto && inner?.selected.isNullOrBlank()) {
+            CurrentNode("Автовыбор", null, true, delay)
+        } else {
+            CurrentNode(NodeCatalog.cleanName(tag).ifBlank { tag }, NodeCatalog.flagFor(tag), isAuto, delay)
+        }
+    }
+
+    // VPN выключен: показываем сохранённый выбор
+    val nodes = catalog?.nodes ?: return null
+    val stored = nodes.firstOrNull { it.tag == storedNode }
+    return when {
+        stored == null || NodeCatalog.isAuto(stored.type) -> CurrentNode("Автовыбор", null, true, 0)
+        else -> CurrentNode(
+            NodeCatalog.cleanName(stored.tag).ifBlank { stored.tag },
+            NodeCatalog.flagFor(stored.tag),
+            false,
+            0,
+        )
+    }
 }
 
 @Composable
@@ -194,7 +422,7 @@ private fun HomeHeader(onImport: () -> Unit, onSettings: () -> Unit) {
     ) {
         IconButton(onClick = onImport) {
             Icon(
-                imageVector = Icons.Outlined.AddLink,
+                imageVector = Icons.Outlined.Add,
                 contentDescription = "Добавить подписку",
                 tint = MaterialTheme.colorScheme.onSurface,
             )
@@ -228,7 +456,30 @@ private fun HomeHeader(onImport: () -> Unit, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun SubscriptionRow(hasProfile: Boolean, profileName: String?, loading: Boolean, onRefresh: () -> Unit) {
+private fun AddSubscriptionBanner(onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Add,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.size(8.dp))
+        Text(
+            text = "Добавить подписку",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun SubscriptionRow(profileName: String?, loading: Boolean, onRefresh: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -242,7 +493,7 @@ private fun SubscriptionRow(hasProfile: Boolean, profileName: String?, loading: 
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (hasProfile) (profileName ?: "Подписка") else "Подписка не указана",
+                    text = profileName ?: "Подписка",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -368,7 +619,7 @@ private fun ConnectButton(serviceStatus: Status, enabled: Boolean, onClick: () -
 }
 
 @Composable
-private fun CurrentNodeBar(nodeName: String?, delay: Int, enabled: Boolean, onClick: () -> Unit) {
+private fun CurrentNodeBar(node: CurrentNode?, enabled: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         enabled = enabled,
@@ -382,32 +633,36 @@ private fun CurrentNodeBar(nodeName: String?, delay: Int, enabled: Boolean, onCl
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Public,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
+            if (node?.flag != null) {
+                Text(text = node.flag, fontSize = 22.sp)
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Bolt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
             Spacer(Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Текущая локация",
+                    text = if (node?.isAuto == true) "Локация · автовыбор" else "Текущая локация",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = nodeName ?: "Не выбрана",
+                    text = node?.title ?: (if (enabled) "Выбрать локацию" else "Нет подписки"),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (delay > 0) {
+            if (node != null && node.delay > 0) {
                 Text(
-                    text = "$delay ms",
+                    text = "${node.delay} ms",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = latencyColorFor(delay),
+                    color = latencyColorFor(node.delay),
                 )
                 Spacer(Modifier.size(8.dp))
             }
