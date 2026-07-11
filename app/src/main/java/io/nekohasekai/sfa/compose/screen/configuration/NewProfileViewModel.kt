@@ -11,6 +11,7 @@ import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.utils.HTTPClient
+import io.nekohasekai.sfa.utils.SubscriptionEnhancer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -300,7 +301,8 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
         typedProfile.path = configFile.path
 
         // Fetch initial config - this MUST succeed for remote profiles
-        val content = HTTPClient().use { it.getString(state.remoteUrl) }
+        // (+ подмешать Hysteria2 из Happ-подписки)
+        val content = SubscriptionEnhancer.fetchAndEnhance(state.remoteUrl)
         Libbox.checkConfig(content)
         val configContent = content
 

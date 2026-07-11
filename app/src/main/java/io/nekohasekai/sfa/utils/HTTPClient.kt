@@ -28,9 +28,9 @@ class HTTPClient : Closeable {
         client.modernTLS()
     }
 
-    fun getString(url: String): String {
+    fun getString(url: String, overrideUserAgent: String? = null): String {
         val request = client.newRequest()
-        request.setUserAgent(userAgent)
+        request.setUserAgent(overrideUserAgent ?: userAgent)
         // HWID-заголовки для Remnawave (привязка устройства). Безвредны для
         // прочих endpoint'ов — они их просто игнорируют.
         runCatching {

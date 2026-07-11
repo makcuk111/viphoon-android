@@ -15,8 +15,8 @@ import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.utils.AppLifecycleObserver
 import io.nekohasekai.sfa.utils.CommandClient
 import io.nekohasekai.sfa.utils.CommandTarget
-import io.nekohasekai.sfa.utils.HTTPClient
 import io.nekohasekai.sfa.utils.RemoteControlManager
+import io.nekohasekai.sfa.utils.SubscriptionEnhancer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -362,8 +362,8 @@ class DashboardViewModel :
             }
 
             try {
-                // Fetch remote config
-                val content = HTTPClient().use { it.getString(profile.typed.remoteURL) }
+                // Fetch remote config (+ подмешать Hysteria2 из Happ-подписки)
+                val content = SubscriptionEnhancer.fetchAndEnhance(profile.typed.remoteURL)
                 Libbox.checkConfig(content)
 
                 // Check if content changed

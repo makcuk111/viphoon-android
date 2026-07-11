@@ -13,7 +13,7 @@ import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
-import io.nekohasekai.sfa.utils.HTTPClient
+import io.nekohasekai.sfa.utils.SubscriptionEnhancer
 import java.io.File
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -75,7 +75,7 @@ class UpdateProfileWork {
                     continue
                 }
                 try {
-                    val content = HTTPClient().use { it.getString(profile.typed.remoteURL) }
+                    val content = SubscriptionEnhancer.fetchAndEnhance(profile.typed.remoteURL)
                     Libbox.checkConfig(content)
                     val file = File(profile.typed.path)
                     if (file.readText() != content) {
