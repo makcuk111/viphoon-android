@@ -17,10 +17,11 @@ import io.nekohasekai.sfa.compose.screen.configuration.NewProfileScreen
 import io.nekohasekai.sfa.compose.screen.connections.ConnectionDetailsRoute
 import io.nekohasekai.sfa.compose.screen.connections.ConnectionsPage
 import io.nekohasekai.sfa.compose.screen.connections.ConnectionsViewModel
-import io.nekohasekai.sfa.compose.screen.dashboard.DashboardScreen
 import io.nekohasekai.sfa.compose.screen.dashboard.DashboardViewModel
 import io.nekohasekai.sfa.compose.screen.dashboard.GroupsCard
 import io.nekohasekai.sfa.compose.screen.dashboard.groups.GroupsViewModel
+import io.nekohasekai.sfa.compose.screen.home.AddSubscriptionScreen
+import io.nekohasekai.sfa.compose.screen.home.HomeScreen
 import io.nekohasekai.sfa.compose.screen.log.HookLogScreen
 import io.nekohasekai.sfa.compose.screen.log.LogScreen
 import io.nekohasekai.sfa.compose.screen.log.LogViewModel
@@ -104,22 +105,39 @@ fun SFANavHost(
         modifier = modifier,
     ) {
         composable(Screen.Dashboard.route) {
-            if (dashboardViewModel != null) {
-                DashboardScreen(
-                    serviceStatus = serviceStatus,
-                    showStartFab = showStartFab,
-                    showStatusBar = showStatusBar,
-                    onOpenNewProfile = onOpenNewProfile,
-                    viewModel = dashboardViewModel,
-                )
-            } else {
-                DashboardScreen(
-                    serviceStatus = serviceStatus,
-                    showStartFab = showStartFab,
-                    showStatusBar = showStatusBar,
-                    onOpenNewProfile = onOpenNewProfile,
-                )
-            }
+            val dashVM = dashboardViewModel ?: viewModel()
+            val homeGroupsViewModel: GroupsViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        @Suppress("UNCHECKED_CAST")
+                        return GroupsViewModel(dashVM.commandClient) as T
+                    }
+                },
+            )
+            HomeScreen(
+                serviceStatus = serviceStatus,
+                dashboardViewModel = dashVM,
+                groupsViewModel = homeGroupsViewModel,
+                onOpenSettings = {
+                    navController.navigate(Screen.Settings.route) { launchSingleTop = true }
+                },
+                onOpenAddSubscription = {
+                    navController.navigate("home/add_subscription") { launchSingleTop = true }
+                },
+            )
+        }
+
+        composable(
+            route = "home/add_subscription",
+            enterTransition = slideInFromRight,
+            exitTransition = slideOutToLeft,
+            popEnterTransition = slideInFromLeft,
+            popExitTransition = slideOutToRight,
+        ) {
+            AddSubscriptionScreen(
+                onBack = { navController.navigateUp() },
+                onAdded = { navController.navigateUp() },
+            )
         }
 
         composable(Screen.Log.route) {

@@ -761,6 +761,9 @@ class MainActivity :
         val isConnectionsRoute = currentRootRoute == Screen.Connections.route
         val isGroupsRoute = currentRootRoute == Screen.Groups.route
         val isLogRoute = currentRootRoute == Screen.Log.route
+        // Новый главный экран ViPhooN сам содержит кнопку подключения и бар
+        // текущей ноды, поэтому старые FAB/статус-бар на нём не показываем.
+        val isHomeRoute = currentRootRoute == Screen.Dashboard.route
 
         val isSubScreen = isSettingsSubScreen || isToolsSubScreen || isConnectionsDetail || isProfileRoute
         // Get LogViewModel instance if we're on the Log screen
@@ -919,8 +922,8 @@ class MainActivity :
                 // remote control replaces it with the remote session bar.
                 val serviceRunning =
                     currentServiceStatus == Status.Started || currentServiceStatus == Status.Starting
-                val showStatusBar = isRemote || serviceRunning || currentServiceStatus == Status.Stopping
-                val showStartFab = !isRemote && !serviceRunning && dashboardUiState.selectedProfileId != -1L
+                val showStatusBar = (isRemote || serviceRunning || currentServiceStatus == Status.Stopping) && !isHomeRoute
+                val showStartFab = !isRemote && !serviceRunning && dashboardUiState.selectedProfileId != -1L && !isHomeRoute
 
                 SFANavHost(
                     navController = navController,
@@ -1090,7 +1093,8 @@ class MainActivity :
                         visible = !isRemote &&
                             currentServiceStatus == Status.Stopped &&
                             dashboardUiState.selectedProfileId != -1L &&
-                            !isSubScreen,
+                            !isSubScreen &&
+                            !isHomeRoute,
                         enter = scaleIn(),
                         exit = scaleOut(),
                         modifier = Modifier
@@ -1179,7 +1183,9 @@ class MainActivity :
                     snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                     topBar = topBarContent,
                     bottomBar = {
-                        if (!isSubScreen) {
+                        // Таб-бар ViPhooN скрыт: главный экран одноэкранный,
+                        // навигация — через иконки шапки и меню настроек.
+                        if (false && !isSubScreen) {
                             val hasUpdate by UpdateState.hasUpdate
                             NavigationBar {
                                 bottomNavigationScreens.forEach { screen ->
