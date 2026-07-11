@@ -31,6 +31,13 @@ class HTTPClient : Closeable {
     fun getString(url: String): String {
         val request = client.newRequest()
         request.setUserAgent(userAgent)
+        // HWID-заголовки для Remnawave (привязка устройства). Безвредны для
+        // прочих endpoint'ов — они их просто игнорируют.
+        runCatching {
+            request.setHeader("x-hwid", DeviceInfo.hwid)
+            request.setHeader("x-device-os", DeviceInfo.OS)
+            request.setHeader("x-device-model", DeviceInfo.model)
+        }
         request.setURL(url)
         val response = request.execute()
         return response.content.unwrap

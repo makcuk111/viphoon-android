@@ -254,6 +254,21 @@ class MainActivity :
             return
         }
 
+        // Deep-link ViPhooN: viphoon://add/<url> (или viphoon://import/<url>,
+        // либо viphoon://<host>/<path>). Payload может быть percent-encoded.
+        // Нормализуем в https-подписку Remnawave (…/singbox) и предлагаем импорт.
+        if (uri.scheme == "viphoon") {
+            try {
+                val subUrl = normalizeViphoonLink(intent.dataString ?: uri.toString())
+                val host = Uri.parse(subUrl).host ?: subUrl
+                pendingImportProfile = Triple("ViPhooN", host, subUrl)
+                showImportProfileDialog = true
+            } catch (e: Exception) {
+                pendingIntentErrorMessage = e.message ?: "Failed to parse ViPhooN link"
+            }
+            return
+        }
+
         if (intent.action == Intent.ACTION_VIEW &&
             (uri.scheme == ContentResolver.SCHEME_CONTENT || uri.scheme == ContentResolver.SCHEME_FILE)
         ) {
@@ -278,6 +293,23 @@ class MainActivity :
                     }
                 }
         }
+    }
+
+    // viphoon://add/<url> | viphoon://import/<url> | viphoon://<host>/<path>
+    private fun normalizeViphoonLink(raw: String): String {
+        var rest = raw.trim().removePrefix("viphoon://")
+        rest = rest.removePrefix("add/").removePrefix("import/")
+        val decoded = Uri.decode(rest)
+        var url = if (decoded.startsWith("http://") || decoded.startsWith("https://")) {
+            decoded
+        } else {
+            "https://$decoded"
+        }
+        url = url.trimEnd('/')
+        if (!url.endsWith("/singbox")) {
+            url += "/singbox"
+        }
+        return url
     }
 
     @SuppressLint("NewApi")
