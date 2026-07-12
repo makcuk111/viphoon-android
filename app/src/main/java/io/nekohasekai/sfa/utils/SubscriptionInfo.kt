@@ -1,8 +1,5 @@
 package io.nekohasekai.sfa.utils
 
-import java.net.HttpURLConnection
-import java.net.URL
-
 // Данные подписки Remnawave из заголовка ответа `subscription-userinfo`
 // (де-факто стандарт Clash/sing-box: upload/download/total/expire в байтах и
 // unix-времени). Тянем best-effort — при ошибке возвращаем null, карточка
@@ -36,28 +33,17 @@ object SubscriptionInfoFetcher {
 
     fun fetch(remoteURL: String): SubscriptionInfo? = runCatching {
         val base = remoteURL.trim().trimEnd('/').removeSuffix("/singbox").trimEnd('/')
-        val conn = (URL(base).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 10_000
-            readTimeout = 10_000
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", HAPP_USER_AGENT)
-            runCatching {
-                setRequestProperty("x-hwid", DeviceInfo.hwid)
-                setRequestProperty("x-device-os", DeviceInfo.OS)
-                setRequestProperty("x-device-model", DeviceInfo.model)
-            }
-        }
-        try {
-            conn.connect()
-            val header = conn.headerFields.entries
-                .firstOrNull { it.key?.equals("subscription-userinfo", ignoreCase = true) == true }
-                ?.value?.firstOrNull()
-                ?: return null
-            parse(header)
-        } finally {
-            conn.disconnect()
-        }
+        val deviceHeaders = runCatching {
+            mapOf(
+                "x-hwid" to DeviceInfo.hwid,
+                "x-device-os" to DeviceInfo.OS,
+                "x-device-model" to DeviceInfo.model,
+            )
+        }.getOrDefault(emptyMap())
+        // RobustFetch сам обходит проблемы с DNS (DoH по IP, локальный прокси VPN)
+        val response = RobustFetch.get(base, HAPP_USER_AGENT, deviceHeaders)
+        val header = response.headers["subscription-userinfo"] ?: return null
+        parse(header)
     }.getOrNull()
 
     // Формат: "upload=0; download=100; total=1000; expire=1700000000"

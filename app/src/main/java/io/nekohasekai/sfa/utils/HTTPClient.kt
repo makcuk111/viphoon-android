@@ -29,18 +29,34 @@ class HTTPClient : Closeable {
     }
 
     fun getString(url: String, overrideUserAgent: String? = null): String {
-        val request = client.newRequest()
-        request.setUserAgent(overrideUserAgent ?: userAgent)
+        val effectiveUserAgent = overrideUserAgent ?: userAgent
         // HWID-заголовки для Remnawave (привязка устройства). Безвредны для
         // прочих endpoint'ов — они их просто игнорируют.
-        runCatching {
-            request.setHeader("x-hwid", DeviceInfo.hwid)
-            request.setHeader("x-device-os", DeviceInfo.OS)
-            request.setHeader("x-device-model", DeviceInfo.model)
+        val deviceHeaders = runCatching {
+            mapOf(
+                "x-hwid" to DeviceInfo.hwid,
+                "x-device-os" to DeviceInfo.OS,
+                "x-device-model" to DeviceInfo.model,
+            )
+        }.getOrDefault(emptyMap())
+
+        return try {
+            val request = client.newRequest()
+            request.setUserAgent(effectiveUserAgent)
+            deviceHeaders.forEach { (k, v) -> request.setHeader(k, v) }
+            request.setURL(url)
+            val response = request.execute()
+            response.content.unwrap
+        } catch (e: Exception) {
+            // Системный DNS у провайдера может не резолвить домен панели
+            // («no such host») — пробуем обходные пути: DoH по IP и локальный
+            // прокси запущенного VPN.
+            try {
+                RobustFetch.getString(url, effectiveUserAgent, deviceHeaders)
+            } catch (_: Exception) {
+                throw e
+            }
         }
-        request.setURL(url)
-        val response = request.execute()
-        return response.content.unwrap
     }
 
     override fun close() {
