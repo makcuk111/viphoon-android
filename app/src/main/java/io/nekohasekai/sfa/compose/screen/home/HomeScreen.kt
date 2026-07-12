@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,12 +59,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.compose.model.Group
 import io.nekohasekai.sfa.compose.screen.dashboard.DashboardViewModel
 import io.nekohasekai.sfa.compose.screen.dashboard.groups.GroupsViewModel
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.utils.NodeCatalog
+import io.nekohasekai.sfa.utils.formatBytesBinary
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -77,6 +78,7 @@ private data class NodeRow(
     val flag: String?,
     val subtitle: String?,
     val delay: Int,
+    val tested: Boolean,
     val isSelected: Boolean,
     val isAuto: Boolean,
 )
@@ -137,10 +139,19 @@ fun HomeScreen(
         pickCurrentNode(groupsUiState.groups, catalog, storedNode)
     }
 
+    // Пустой clickable без ripple: поглощает касания в пустых зонах экрана,
+    // иначе тапы «проваливаются» на экран, оставшийся в фоне навигации
+    // (баг с призрачными настройками, реагирующими на клики по главному).
+    val blockingInteraction = remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .clickable(
+                interactionSource = blockingInteraction,
+                indication = null,
+                onClick = {},
+            )
             .padding(horizontal = 20.dp),
     ) {
         HomeHeader(
@@ -193,6 +204,12 @@ fun HomeScreen(
     if (showNodeSheet) {
         val rows = remember(mainGroup, catalog, storedNode) {
             buildNodeRows(mainGroup, catalog, storedNode)
+        }
+        // Автозапуск проверки пинга при открытии списка локаций.
+        LaunchedEffect(online) {
+            if (online) {
+                mainGroup?.let { groupsViewModel.urlTest(it.tag) }
+            }
         }
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
@@ -279,6 +296,10 @@ private fun buildNodeRows(mainGroup: Group?, catalog: NodeCatalog.Catalog?, stor
         return emptyList()
     }
 
+    // Если хоть у одной ноды есть результат теста, значит проверка выполнялась —
+    // ноды без результата считаем недоступными (N/A).
+    val anyTested = raw.any { it.delay > 0 }
+
     val rows = raw.map { node ->
         val isAuto = NodeCatalog.isAuto(node.type)
         val subtitle = when {
@@ -293,6 +314,7 @@ private fun buildNodeRows(mainGroup: Group?, catalog: NodeCatalog.Catalog?, stor
             flag = if (isAuto) null else NodeCatalog.flagFor(node.tag),
             subtitle = subtitle,
             delay = node.delay,
+            tested = anyTested,
             isSelected = if (selectedTag.isNotEmpty()) node.tag == selectedTag else isAuto,
             isAuto = isAuto,
         )
@@ -358,6 +380,14 @@ private fun NodeRowItem(row: NodeRow, onClick: () -> Unit) {
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = latencyColorFor(row.delay),
+                )
+                Spacer(Modifier.size(10.dp))
+            } else if (row.tested && !row.isAuto) {
+                Text(
+                    text = "N/A",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error,
                 )
                 Spacer(Modifier.size(10.dp))
             }
@@ -705,9 +735,9 @@ private fun SubscriptionInfoCard(info: io.nekohasekai.sfa.utils.SubscriptionInfo
                     modifier = Modifier.weight(1f),
                     title = "Трафик",
                     value = if (info.hasTraffic) {
-                        "${Libbox.formatBytes(info.usedBytes)} / ${Libbox.formatBytes(info.totalBytes)}"
+                        "${formatBytesBinary(info.usedBytes)} / ${formatBytesBinary(info.totalBytes)}"
                     } else {
-                        Libbox.formatBytes(info.usedBytes)
+                        formatBytesBinary(info.usedBytes)
                     },
                 )
             }

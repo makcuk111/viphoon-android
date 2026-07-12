@@ -59,6 +59,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import io.nekohasekai.sfa.R
+import io.nekohasekai.sfa.compose.navigation.safeNavigate
+import io.nekohasekai.sfa.compose.navigation.safeNavigateUp
 import io.nekohasekai.sfa.compose.theme.ThemeState
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
 import io.nekohasekai.sfa.database.Settings
@@ -73,7 +75,7 @@ fun SettingsScreen(navController: NavController) {
         TopAppBar(
             title = { Text(stringResource(R.string.title_settings)) },
             navigationIcon = {
-                IconButton(onClick = { navController.navigateUp() }) {
+                IconButton(onClick = { navController.safeNavigateUp() }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = null,
@@ -226,7 +228,7 @@ fun SettingsScreen(navController: NavController) {
                     modifier =
                     Modifier
                         .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                        .clickable { navController.navigate("settings/viphoon") },
+                        .clickable { navController.safeNavigate("settings/viphoon") },
                     colors =
                     ListItemDefaults.colors(
                         containerColor = Color.Transparent,
@@ -254,7 +256,7 @@ fun SettingsScreen(navController: NavController) {
                     },
                     modifier =
                     Modifier
-                        .clickable { navController.navigate("settings/app") },
+                        .clickable { navController.safeNavigate("settings/app") },
                     colors =
                     ListItemDefaults.colors(
                         containerColor = Color.Transparent,
@@ -277,7 +279,7 @@ fun SettingsScreen(navController: NavController) {
                     },
                     modifier =
                     Modifier
-                        .clickable { navController.navigate("settings/core") },
+                        .clickable { navController.safeNavigate("settings/core") },
                     colors =
                     ListItemDefaults.colors(
                         containerColor = Color.Transparent,
@@ -298,7 +300,7 @@ fun SettingsScreen(navController: NavController) {
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     },
-                    modifier = Modifier.clickable { navController.navigate("settings/service") },
+                    modifier = Modifier.clickable { navController.safeNavigate("settings/service") },
                     colors =
                     ListItemDefaults.colors(
                         containerColor = Color.Transparent,
@@ -321,7 +323,7 @@ fun SettingsScreen(navController: NavController) {
                     },
                     modifier =
                     Modifier
-                        .clickable { navController.navigate("settings/profile_override") },
+                        .clickable { navController.safeNavigate("settings/profile_override") },
                     colors =
                     ListItemDefaults.colors(
                         containerColor = Color.Transparent,
@@ -344,7 +346,7 @@ fun SettingsScreen(navController: NavController) {
                     },
                     modifier =
                     Modifier
-                        .clickable { navController.navigate("settings/remote_control") },
+                        .clickable { navController.safeNavigate("settings/remote_control") },
                     colors =
                     ListItemDefaults.colors(
                         containerColor = Color.Transparent,
@@ -375,7 +377,7 @@ fun SettingsScreen(navController: NavController) {
                     modifier =
                     Modifier
                         .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
-                        .clickable { navController.navigate("settings/privilege") },
+                        .clickable { navController.safeNavigate("settings/privilege") },
                     colors =
                     ListItemDefaults.colors(
                         containerColor = Color.Transparent,
@@ -413,7 +415,7 @@ fun SettingsScreen(navController: NavController) {
                     modifier =
                     Modifier
                         .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                        .clickable { navController.navigate("log") },
+                        .clickable { navController.safeNavigate("log") },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
                 ListItem(
@@ -433,7 +435,7 @@ fun SettingsScreen(navController: NavController) {
                     modifier =
                     Modifier
                         .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
-                        .clickable { navController.navigate("tools") },
+                        .clickable { navController.safeNavigate("tools") },
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
             }

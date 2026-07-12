@@ -757,13 +757,18 @@ class MainActivity :
         val isToolsSubScreen = currentRoute?.startsWith("tools/") == true
         val isConnectionsDetail = currentRoute?.startsWith("connections/detail") == true
         val isProfileRoute = currentRoute?.startsWith("profile/") == true
+        // Подэкраны главного (например, home/add_subscription) относятся к корню
+        // Dashboard. Без этого редирект на «разрешённые» маршруты ниже прерывал
+        // переход и ломал NavHost: закрытые экраны оставались невидимым
+        // кликабельным слоем («призрачные» настройки).
+        val isHomeSubScreen = currentRoute?.startsWith("home/") == true
         val currentRootRoute =
             when {
                 isSettingsSubScreen -> Screen.Settings.route
                 isToolsSubScreen -> Screen.Tools.route
                 currentRoute?.startsWith(Screen.Connections.route) == true -> Screen.Connections.route
                 currentRoute?.startsWith(Screen.Log.route) == true -> Screen.Log.route
-                isProfileRoute -> Screen.Dashboard.route
+                isProfileRoute || isHomeSubScreen -> Screen.Dashboard.route
                 else -> currentRoute
             }
         val isConnectionsRoute = currentRootRoute == Screen.Connections.route

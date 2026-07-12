@@ -19,6 +19,9 @@ import javax.net.ssl.SSLSocketFactory
 //   2) резолв через DoH (8.8.8.8 / 1.1.1.1 доступны по IP) + TLS с нужным SNI;
 //   3) через локальный прокси запущенного VPN (127.0.0.1:2412).
 object RobustFetch {
+    // Короткий connect-таймаут: если хост «молчит», быстрее переходим к
+    // следующему способу (DoH/прокси) вместо долгого зависания.
+    private const val CONNECT_TIMEOUT_MS = 7_000
     private const val TIMEOUT_MS = 15_000
     private const val LOCAL_PROXY_PORT = 2412
     private const val MAX_REDIRECTS = 4
@@ -50,7 +53,7 @@ object RobustFetch {
 
     private fun direct(url: String, userAgent: String, headers: Map<String, String>, proxy: Proxy?): Response {
         val conn = (if (proxy != null) URL(url).openConnection(proxy) else URL(url).openConnection()) as HttpURLConnection
-        conn.connectTimeout = TIMEOUT_MS
+        conn.connectTimeout = CONNECT_TIMEOUT_MS
         conn.readTimeout = TIMEOUT_MS
         conn.instanceFollowRedirects = true
         conn.setRequestProperty("User-Agent", userAgent)
@@ -79,7 +82,7 @@ object RobustFetch {
         for ((endpoint, accept) in endpoints) {
             val ip = runCatching {
                 val conn = URL(endpoint).openConnection() as HttpsURLConnection
-                conn.connectTimeout = TIMEOUT_MS
+                conn.connectTimeout = CONNECT_TIMEOUT_MS
                 conn.readTimeout = TIMEOUT_MS
                 if (accept != null) conn.setRequestProperty("Accept", accept)
                 try {
@@ -109,7 +112,7 @@ object RobustFetch {
         val ip = dohResolve(host)
 
         val raw = Socket()
-        raw.connect(InetSocketAddress(ip, port), TIMEOUT_MS)
+        raw.connect(InetSocketAddress(ip, port), CONNECT_TIMEOUT_MS)
         raw.soTimeout = TIMEOUT_MS
         val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
         // createSocket(socket, host, ...) выставляет SNI = host на Android

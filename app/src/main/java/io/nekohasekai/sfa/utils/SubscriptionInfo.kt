@@ -28,6 +28,26 @@ data class SubscriptionInfo(
         }
 }
 
+// Форматирование объёма по основанию 1024: панель задаёт лимит в GiB
+// (500 ГБ = 500 × 2^30 байт), а десятичный формат Libbox.formatBytes
+// показывал бы «536.87 GB» вместо ожидаемых «500 GB».
+fun formatBytesBinary(bytes: Long): String {
+    if (bytes < 0) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB", "TB", "PB")
+    var value = bytes.toDouble()
+    var unit = 0
+    while (value >= 1024 && unit < units.size - 1) {
+        value /= 1024
+        unit++
+    }
+    val text = if (value >= 100 || value == Math.floor(value)) {
+        String.format(java.util.Locale.US, "%.0f", value)
+    } else {
+        String.format(java.util.Locale.US, "%.1f", value).removeSuffix(".0")
+    }
+    return "$text ${units[unit]}"
+}
+
 object SubscriptionInfoFetcher {
     private const val HAPP_USER_AGENT = "Happ/2.0.0"
 

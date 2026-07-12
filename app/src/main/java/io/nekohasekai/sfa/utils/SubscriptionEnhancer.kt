@@ -1,5 +1,9 @@
 package io.nekohasekai.sfa.utils
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -11,15 +15,26 @@ import org.json.JSONObject
 object SubscriptionEnhancer {
     private const val HAPP_USER_AGENT = "Happ/2.0.0"
 
+    // Сколько ждём Happ-подписку СВЕРХ времени основного запроса. Hysteria2 —
+    // необязательное дополнение, из-за него добавление подписки тормозить
+    // не должно.
+    private const val HAPP_EXTRA_WAIT_MS = 8_000L
+
     // Скачать sing-box-конфиг и подмешать Hysteria2-ноды из Happ-подписки.
-    fun fetchAndEnhance(remoteURL: String): String {
+    // Оба запроса идут параллельно — раньше они шли последовательно и
+    // добавление подписки занимало двойное время.
+    fun fetchAndEnhance(remoteURL: String): String = runBlocking {
+        val happDeferred = async(Dispatchers.IO) {
+            runCatching {
+                HTTPClient().use { it.getString(baseUrl(remoteURL), HAPP_USER_AGENT) }
+            }.getOrNull()
+        }
         val content = HTTPClient().use { it.getString(remoteURL) }
-        return enhance(content, remoteURL)
+        val happText = withTimeoutOrNull(HAPP_EXTRA_WAIT_MS) { happDeferred.await() }
+        if (happText == null) content else enhanceWith(content, happText)
     }
 
-    fun enhance(singboxConfig: String, remoteURL: String): String = runCatching {
-        val base = baseUrl(remoteURL)
-        val happText = HTTPClient().use { it.getString(base, HAPP_USER_AGENT) }
+    private fun enhanceWith(singboxConfig: String, happText: String): String = runCatching {
         val nodes = parseHysteria(happText)
         if (nodes.isEmpty()) return singboxConfig
         inject(singboxConfig, nodes)

@@ -1,4 +1,4 @@
-package io.nekohasekai.sfa.compose.navigation
+﻿package io.nekohasekai.sfa.compose.navigation
 
 import android.net.Uri
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -103,6 +103,13 @@ fun SFANavHost(
         navController = navController,
         startDestination = Screen.Dashboard.route,
         modifier = modifier,
+        // Короткий фейд вместо дефолтного длинного кроссфейда: чем дольше
+        // переход, тем проще прервать его тапом и получить «зависший»
+        // невидимый экран, перехватывающий клики.
+        enterTransition = { androidx.compose.animation.fadeIn(tween(150)) },
+        exitTransition = { androidx.compose.animation.fadeOut(tween(150)) },
+        popEnterTransition = { androidx.compose.animation.fadeIn(tween(150)) },
+        popExitTransition = { androidx.compose.animation.fadeOut(tween(150)) },
     ) {
         composable(Screen.Dashboard.route) {
             val dashVM = dashboardViewModel ?: viewModel()
@@ -119,10 +126,10 @@ fun SFANavHost(
                 dashboardViewModel = dashVM,
                 groupsViewModel = homeGroupsViewModel,
                 onOpenSettings = {
-                    navController.navigate(Screen.Settings.route) { launchSingleTop = true }
+                    navController.safeNavigate(Screen.Settings.route)
                 },
                 onOpenAddSubscription = {
-                    navController.navigate("home/add_subscription") { launchSingleTop = true }
+                    navController.safeNavigate("home/add_subscription")
                 },
             )
         }
@@ -135,8 +142,8 @@ fun SFANavHost(
             popExitTransition = slideOutToRight,
         ) {
             AddSubscriptionScreen(
-                onBack = { navController.navigateUp() },
-                onAdded = { navController.navigateUp() },
+                onBack = { navController.safeNavigateUp() },
+                onAdded = { navController.safeNavigateUp() },
             )
         }
 
@@ -209,7 +216,7 @@ fun SFANavHost(
                 qrsData = newProfileArgs.qrsData,
                 onNavigateBack = {
                     onClearNewProfileArgs()
-                    navController.navigateUp()
+                    navController.safeNavigateUp()
                 },
                 onProfileCreated = { profileId ->
                     onClearNewProfileArgs()
@@ -233,7 +240,7 @@ fun SFANavHost(
             val profileId = backStackEntry.arguments?.getLong("profileId") ?: -1L
             EditProfileRoute(
                 profileId = profileId,
-                onNavigateBack = { navController.navigateUp() },
+                onNavigateBack = { navController.safeNavigateUp() },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -246,14 +253,14 @@ fun SFANavHost(
                         connectionId = connectionId,
                         serviceStatus = serviceStatus,
                         viewModel = connectionsViewModel,
-                        onBack = { navController.navigateUp() },
+                        onBack = { navController.safeNavigateUp() },
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
                     ConnectionDetailsRoute(
                         connectionId = connectionId,
                         serviceStatus = serviceStatus,
-                        onBack = { navController.navigateUp() },
+                        onBack = { navController.safeNavigateUp() },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -590,7 +597,7 @@ fun SFANavHost(
             popEnterTransition = slideInFromLeft,
             popExitTransition = slideOutToRight,
         ) {
-            PerAppProxyScreen(onBack = { navController.navigateUp() }, serviceStatus = serviceStatus)
+            PerAppProxyScreen(onBack = { navController.safeNavigateUp() }, serviceStatus = serviceStatus)
         }
 
         composable(
@@ -642,7 +649,7 @@ fun SFANavHost(
             popEnterTransition = slideInFromLeft,
             popExitTransition = slideOutToRight,
         ) {
-            PrivilegeSettingsManageScreen(onBack = { navController.navigateUp() }, serviceStatus = serviceStatus)
+            PrivilegeSettingsManageScreen(onBack = { navController.safeNavigateUp() }, serviceStatus = serviceStatus)
         }
 
         composable(
@@ -684,7 +691,7 @@ fun SFANavHost(
             popEnterTransition = slideInFromLeft,
             popExitTransition = slideOutToRight,
         ) {
-            HookLogScreen(onBack = { navController.navigateUp() })
+            HookLogScreen(onBack = { navController.safeNavigateUp() })
         }
     }
 }
