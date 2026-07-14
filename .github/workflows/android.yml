@@ -12,7 +12,7 @@ name: Build ViPhooN APK
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, dev]
   workflow_dispatch:
     inputs:
       sing_box_ref:
