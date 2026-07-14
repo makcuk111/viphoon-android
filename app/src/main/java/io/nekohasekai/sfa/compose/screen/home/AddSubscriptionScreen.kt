@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +43,7 @@ import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.TypedProfile
+import io.nekohasekai.sfa.ktx.clipboardText
 import io.nekohasekai.sfa.utils.SubscriptionEnhancer
 import io.nekohasekai.sfa.utils.ViphoonLinks
 import kotlinx.coroutines.Dispatchers
@@ -69,6 +71,19 @@ fun AddSubscriptionScreen(
     var replace by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var clipHint by remember { mutableStateOf(false) }
+
+    // Умный импорт: если поле пустое, а в буфере обмена лежит ссылка/конфиг —
+    // подставляем её и показываем подсказку.
+    LaunchedEffect(Unit) {
+        if (key.isBlank()) {
+            val clip = runCatching { clipboardText }.getOrNull()?.trim().orEmpty()
+            if (clip.isNotEmpty() && ViphoonLinks.looksLikeLink(clip)) {
+                key = clip
+                clipHint = true
+            }
+        }
+    }
 
     OverrideTopBar {
         TopAppBar(
@@ -171,12 +186,24 @@ fun AddSubscriptionScreen(
 
             OutlinedTextField(
                 value = key,
-                onValueChange = { key = it },
+                onValueChange = {
+                    key = it
+                    clipHint = false
+                },
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("https://sub.viphoon.app/…") },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
             )
+
+            if (clipHint) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Ссылка вставлена из буфера обмена",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
 
             Spacer(Modifier.height(12.dp))
 

@@ -104,7 +104,8 @@ object Settings {
     const val ROUTE_MODE_ALL = "all"
     const val ROUTE_MODE_EXCLUDE = "exclude"
     const val ROUTE_MODE_ONLY = "only"
-    const val MAX_SITE_LIST = 100
+    const val MAX_SITE_LIST = 200
+    const val MAX_APP_LIST = 200
 
     var viphoonTlsRecordFragment by dataStore.boolean(SettingsKey.VIPHOON_TLS_RECORD_FRAGMENT) { false }
     var viphoonTlsFragment by dataStore.boolean(SettingsKey.VIPHOON_TLS_FRAGMENT) { false }
@@ -112,6 +113,10 @@ object Settings {
     var viphoonMuxMaxStreams by dataStore.int(SettingsKey.VIPHOON_MUX_MAX_STREAMS) { 4 }
     var viphoonRouteMode by dataStore.string(SettingsKey.VIPHOON_ROUTE_MODE) { ROUTE_MODE_ALL }
     var viphoonSiteList by dataStore.stringSet(SettingsKey.VIPHOON_SITE_LIST) { emptySet() }
+
+    // Приложения (Android package names) для маршрутизации exclude/only —
+    // через route-правило package_name. Аналог app_list в десктоп-клиенте.
+    var viphoonAppList by dataStore.stringSet(SettingsKey.VIPHOON_APP_LIST) { emptySet() }
 
     // Тема приложения: тёмная по умолчанию (как в десктоп-клиенте)
     const val THEME_DARK = "dark"
@@ -121,6 +126,10 @@ object Settings {
 
     // Последняя выбранная нода (для показа и выбора локации при выключенном VPN)
     var viphoonSelectedNode by dataStore.string(SettingsKey.VIPHOON_SELECTED_NODE) { "" }
+
+    // Пользовательский порядок нод в списке локаций (JSON-массив тегов),
+    // задаётся перетаскиванием в списке локаций.
+    var viphoonNodeOrder by dataStore.string(SettingsKey.VIPHOON_NODE_ORDER) { "" }
 
     var privilegeSettingsEnabled by dataStore.boolean(SettingsKey.PRIVILEGE_SETTINGS_ENABLED) { false }
     var privilegeSettingsList by dataStore.stringSet(SettingsKey.PRIVILEGE_SETTINGS_LIST) { emptySet() }

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 
 data class HomeSubscriptionState(
     val loading: Boolean = false,
@@ -75,9 +76,17 @@ class HomeViewModel : ViewModel() {
     private val _storedNode = MutableStateFlow("")
     val storedNode = _storedNode.asStateFlow()
 
+    // Пользовательский порядок нод (drag-and-drop в списке локаций).
+    private val _nodeOrder = MutableStateFlow<List<String>>(emptyList())
+    val nodeOrder = _nodeOrder.asStateFlow()
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
             _storedNode.value = Settings.viphoonSelectedNode
+            _nodeOrder.value = runCatching {
+                val arr = JSONArray(Settings.viphoonNodeOrder)
+                (0 until arr.length()).map { arr.getString(it) }
+            }.getOrDefault(emptyList())
         }
     }
 
@@ -85,6 +94,13 @@ class HomeViewModel : ViewModel() {
         _storedNode.value = tag
         viewModelScope.launch(Dispatchers.IO) {
             Settings.viphoonSelectedNode = tag
+        }
+    }
+
+    fun saveNodeOrder(tags: List<String>) {
+        _nodeOrder.value = tags
+        viewModelScope.launch(Dispatchers.IO) {
+            Settings.viphoonNodeOrder = JSONArray(tags).toString()
         }
     }
 }

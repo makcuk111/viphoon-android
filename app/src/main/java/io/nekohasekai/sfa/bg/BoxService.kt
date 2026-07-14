@@ -36,6 +36,7 @@ import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.ktx.hasPermission
 import io.nekohasekai.sfa.utils.ConfigTweaks
+import io.nekohasekai.sfa.utils.MihomoBridge
 import io.nekohasekai.sfa.vendor.Vendor
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -127,6 +128,13 @@ class BoxService(private val service: Service, private val platformInterface: Pl
             }
             content = ConfigTweaks.apply(content)
 
+            // XHTTP-мост: если в конфиге есть socks-ноды моста — поднять mihomo
+            if (MihomoBridge.hasBridge(content)) {
+                MihomoBridge.start()
+            } else {
+                MihomoBridge.stop()
+            }
+
             lastProfileName = profile.name
             withContext(Dispatchers.Main) {
                 notification.show(lastProfileName, R.string.status_starting)
@@ -216,6 +224,11 @@ class BoxService(private val service: Service, private val platformInterface: Pl
             return
         }
         content = ConfigTweaks.apply(content)
+        if (MihomoBridge.hasBridge(content)) {
+            MihomoBridge.start()
+        } else {
+            MihomoBridge.stop()
+        }
         lastProfileName = profile.name
         try {
             commandServer.startOrReloadService(
@@ -282,6 +295,7 @@ class BoxService(private val service: Service, private val platformInterface: Pl
             receiverRegistered = false
         }
         notification.close()
+        MihomoBridge.stop()
         GlobalScope.launch(Dispatchers.IO) {
             val pfd = fileDescriptor
             if (pfd != null) {
@@ -318,6 +332,7 @@ class BoxService(private val service: Service, private val platformInterface: Pl
             fileDescriptor = null
         }
         DefaultNetworkMonitor.stop()
+        MihomoBridge.stop()
         if (::commandServer.isInitialized) {
             closeService()
             commandServer.close()

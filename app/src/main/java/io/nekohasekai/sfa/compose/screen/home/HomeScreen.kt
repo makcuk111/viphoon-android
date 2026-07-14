@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -65,6 +66,8 @@ import io.nekohasekai.sfa.compose.screen.dashboard.groups.GroupsViewModel
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.utils.NodeCatalog
 import io.nekohasekai.sfa.utils.formatBytesBinary
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -83,7 +86,7 @@ private data class NodeRow(
     val isAuto: Boolean,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     serviceStatus: Status,
@@ -98,6 +101,7 @@ fun HomeScreen(
     val subscription by homeViewModel.subscription.collectAsState()
     val catalog by homeViewModel.catalog.collectAsState()
     val storedNode by homeViewModel.storedNode.collectAsState()
+    val nodeOrder by homeViewModel.nodeOrder.collectAsState()
 
     val hasProfile = dashboardUiState.selectedProfileId != -1L
     val selectedProfile = remember(dashboardUiState.profiles, dashboardUiState.selectedProfileId) {
@@ -202,8 +206,21 @@ fun HomeScreen(
     }
 
     if (showNodeSheet) {
-        val rows = remember(mainGroup, catalog, storedNode) {
-            buildNodeRows(mainGroup, catalog, storedNode)
+        val rows = remember(mainGroup, catalog, storedNode, nodeOrder) {
+            buildNodeRows(mainGroup, catalog, storedNode, nodeOrder)
+        }
+        // Локальный порядок нод на время открытого списка: перетаскивание
+        // меняет его сразу, в настройки сохраняем при закрытии списка.
+        // Ключ — только теги, чтобы обновление пингов не сбрасывало порядок.
+        val tagsKey = rows.map { it.tag }
+        var orderTags by remember(tagsKey) { mutableStateOf(tagsKey) }
+        val orderedRows = remember(rows, orderTags) {
+            orderTags.mapNotNull { t -> rows.firstOrNull { it.tag == t } }
+        }
+        val persistOrder = {
+            homeViewModel.saveNodeOrder(
+                orderedRows.filter { !it.isAuto }.map { it.tag },
+            )
         }
         // Автозапуск проверки пинга при открытии списка локаций.
         LaunchedEffect(online) {
@@ -213,7 +230,10 @@ fun HomeScreen(
         }
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
-            onDismissRequest = { showNodeSheet = false },
+            onDismissRequest = {
+                persistOrder()
+                showNodeSheet = false
+            },
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
@@ -250,7 +270,21 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.height(4.dp))
                 }
+                Text(
+                    text = "Долгое нажатие — изменить порядок",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+                Spacer(Modifier.height(4.dp))
+                val lazyListState = rememberLazyListState()
+                val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
+                    orderTags = orderTags.toMutableList().apply {
+                        add(to.index, removeAt(from.index))
+                    }
+                }
                 LazyColumn(
+                    state = lazyListState,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(520.dp),
@@ -262,15 +296,20 @@ fun HomeScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    items(rows, key = { it.tag }) { row ->
-                        NodeRowItem(
-                            row = row,
-                            onClick = {
-                                mainGroup?.let { groupsViewModel.selectGroupItem(it.tag, row.tag) }
-                                homeViewModel.rememberNodeSelection(row.tag)
-                                showNodeSheet = false
-                            },
-                        )
+                    items(orderedRows, key = { it.tag }) { row ->
+                        ReorderableItem(reorderableState, key = row.tag) { isDragging ->
+                            NodeRowItem(
+                                row = row,
+                                isDragging = isDragging,
+                                onClick = {
+                                    mainGroup?.let { groupsViewModel.selectGroupItem(it.tag, row.tag) }
+                                    homeViewModel.rememberNodeSelection(row.tag)
+                                    persistOrder()
+                                    showNodeSheet = false
+                                },
+                                modifier = Modifier.longPressDraggableHandle(),
+                            )
+                        }
                     }
                 }
             }
@@ -278,8 +317,14 @@ fun HomeScreen(
     }
 }
 
-// Плоский список: автовыбор первым, дальше все локации в порядке подписки.
-private fun buildNodeRows(mainGroup: Group?, catalog: NodeCatalog.Catalog?, storedNode: String): List<NodeRow> {
+// Плоский список: автовыбор первым, дальше локации в пользовательском порядке
+// (drag-and-drop), новые ноды — в конце в порядке подписки.
+private fun buildNodeRows(
+    mainGroup: Group?,
+    catalog: NodeCatalog.Catalog?,
+    storedNode: String,
+    userOrder: List<String> = emptyList(),
+): List<NodeRow> {
     data class RawNode(val tag: String, val type: String, val delay: Int)
 
     val raw: List<RawNode>
@@ -319,25 +364,34 @@ private fun buildNodeRows(mainGroup: Group?, catalog: NodeCatalog.Catalog?, stor
             isAuto = isAuto,
         )
     }
-    return rows.sortedByDescending { it.isAuto }
+    // Пользовательский порядок: сначала известные теги в сохранённом порядке,
+    // затем новые (не встречавшиеся) в порядке подписки. Автовыбор всегда сверху.
+    val position = userOrder.withIndex().associate { (i, t) -> t to i }
+    val sorted = rows.sortedBy { position[it.tag] ?: (position.size + rows.indexOf(it)) }
+    return sorted.sortedByDescending { it.isAuto }
 }
 
 @Composable
-private fun NodeRowItem(row: NodeRow, onClick: () -> Unit) {
+private fun NodeRowItem(
+    row: NodeRow,
+    onClick: () -> Unit,
+    isDragging: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        color = if (row.isSelected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        color = when {
+            isDragging -> MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+            row.isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         },
-        border = if (row.isSelected) {
+        border = if (row.isSelected || isDragging) {
             androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
         } else {
             null
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
         Row(
             modifier = Modifier

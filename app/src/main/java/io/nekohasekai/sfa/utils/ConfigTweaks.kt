@@ -1,5 +1,6 @@
 package io.nekohasekai.sfa.utils
 
+import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.database.Settings
 import org.json.JSONArray
 import org.json.JSONObject
@@ -30,6 +31,7 @@ object ConfigTweaks {
         val muxStreams = Settings.viphoonMuxMaxStreams.coerceAtLeast(1)
         val routeMode = Settings.viphoonRouteMode
         val siteList = Settings.viphoonSiteList.filter { it.isNotBlank() }.take(Settings.MAX_SITE_LIST)
+        val appList = Settings.viphoonAppList.filter { it.isNotBlank() }.take(Settings.MAX_APP_LIST)
 
         val outbounds = cfg.optJSONArray("outbounds") ?: return
 
@@ -59,36 +61,61 @@ object ConfigTweaks {
             }
         }
 
-        // Маршрутизация по списку сайтов
-        if (routeMode == Settings.ROUTE_MODE_ALL || siteList.isEmpty()) return
+        // Маршрутизация по спискам сайтов и приложений
+        applyRouting(cfg, outbounds, routeMode, siteList, appList)
+
+        // Anti-loop для mihomo-моста (xhttp): трафик самого приложения —
+        // в т.ч. дочернего процесса mihomo — идёт мимо TUN самым первым
+        // правилом, иначе исходящие соединения моста зациклятся через
+        // собственный туннель.
+        if (MihomoBridge.hasBridge(cfg)) {
+            val directTag = findTagByType(outbounds, "direct")
+            val rulesArr = cfg.optJSONObject("route")?.optJSONArray("rules")
+            if (directTag != null && rulesArr != null) {
+                insertFirst(
+                    rulesArr,
+                    JSONObject()
+                        .put("package_name", JSONArray().put(Application.application.packageName))
+                        .put("outbound", directTag),
+                )
+            }
+        }
+    }
+
+    private fun applyRouting(
+        cfg: JSONObject,
+        outbounds: JSONArray,
+        routeMode: String,
+        siteList: List<String>,
+        appList: List<String>,
+    ) {
+        if (routeMode == Settings.ROUTE_MODE_ALL || (siteList.isEmpty() && appList.isEmpty())) return
         val direct = findTagByType(outbounds, "direct") ?: return
         val selector = findTagByType(outbounds, "selector") ?: return
         val route = cfg.optJSONObject("route") ?: return
         val rules = route.optJSONArray("rules") ?: return
 
-        val suffixes = JSONArray()
-        for (s in siteList) suffixes.put(s)
+        // Куда направить трафик из списков: exclude → напрямую, only → через VPN
+        val target = when (routeMode) {
+            Settings.ROUTE_MODE_EXCLUDE -> direct
+            Settings.ROUTE_MODE_ONLY -> selector
+            else -> return
+        }
 
-        when (routeMode) {
-            // Сайты из списка — напрямую, остальное через VPN
-            Settings.ROUTE_MODE_EXCLUDE -> {
-                insertFirst(
-                    rules,
-                    JSONObject()
-                        .put("domain_suffix", suffixes)
-                        .put("outbound", direct),
-                )
-            }
-            // Через VPN — только сайты из списка, остальное напрямую
-            Settings.ROUTE_MODE_ONLY -> {
-                insertFirst(
-                    rules,
-                    JSONObject()
-                        .put("domain_suffix", suffixes)
-                        .put("outbound", selector),
-                )
-                route.put("final", direct)
-            }
+        // Приложения (package_name) и сайты (domain_suffix) — отдельными правилами
+        if (appList.isNotEmpty()) {
+            val packages = JSONArray()
+            for (p in appList) packages.put(p)
+            insertFirst(rules, JSONObject().put("package_name", packages).put("outbound", target))
+        }
+        if (siteList.isNotEmpty()) {
+            val suffixes = JSONArray()
+            for (s in siteList) suffixes.put(s)
+            insertFirst(rules, JSONObject().put("domain_suffix", suffixes).put("outbound", target))
+        }
+        // В режиме "only" весь остальной трафик идёт напрямую
+        if (routeMode == Settings.ROUTE_MODE_ONLY) {
+            route.put("final", direct)
         }
     }
 

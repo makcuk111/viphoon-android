@@ -19,6 +19,10 @@ on:
         description: "git ref (tag/branch/commit) репозитория SagerNet/sing-box для сборки libbox"
         required: true
         default: "dev-next"
+      mihomo_version:
+        description: "версия mihomo (xhttp-мост), напр. v1.19.28"
+        required: false
+        default: "v1.19.28"
 
 permissions:
   contents: read
@@ -28,6 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SING_BOX_REF: ${{ github.event.inputs.sing_box_ref || 'dev-next' }}
+      MIHOMO_VERSION: ${{ github.event.inputs.mihomo_version || 'v1.19.28' }}
     steps:
       - name: Checkout ViPhooN (с сабмодулями)
         uses: actions/checkout@v4
@@ -84,6 +89,32 @@ jobs:
           mkdir -p app/libs
           find sing-box-src -maxdepth 2 -name 'libbox*.aar' -exec cp -v {} app/libs/ \;
           ls -lh app/libs/
+
+      - name: Скачать mihomo (xhttp-мост) в jniLibs
+        env:
+          MIHOMO_VERSION: ${{ env.MIHOMO_VERSION }}
+        run: |
+          set -e
+          # mihomo поднимает xhttp/splithttp-ноды, которые sing-box не умеет.
+          # Бинарь кладём как «нативную библиотеку» libmihomo.so — только из
+          # nativeLibraryDir Android 10+ разрешает запуск исполняемых файлов.
+          ver="${MIHOMO_VERSION:-v1.19.28}"
+          base="https://github.com/MetaCubeX/mihomo/releases/download/${ver}"
+          # abi:asset
+          for pair in \
+            "arm64-v8a:mihomo-android-arm64-v8" \
+            "armeabi-v7a:mihomo-android-armv7" \
+            "x86:mihomo-android-386" \
+            "x86_64:mihomo-android-amd64"; do
+            abi="${pair%%:*}"; asset="${pair##*:}"
+            dst="app/src/main/jniLibs/${abi}"
+            mkdir -p "$dst"
+            echo "==> ${asset}-${ver}.gz -> ${dst}/libmihomo.so"
+            curl -fsSL "${base}/${asset}-${ver}.gz" -o /tmp/mihomo.gz
+            gunzip -c /tmp/mihomo.gz > "${dst}/libmihomo.so"
+            chmod +x "${dst}/libmihomo.so"
+          done
+          ls -lhR app/src/main/jniLibs/
 
       - name: Сборка APK (otherDebug, universal)
         run: |
