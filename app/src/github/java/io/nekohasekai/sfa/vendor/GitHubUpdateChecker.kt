@@ -14,8 +14,11 @@ import java.io.Closeable
 
 class GitHubUpdateChecker : Closeable {
     companion object {
-        private const val RELEASES_URL = "https://api.github.com/repos/SagerNet/sing-box/releases"
-        private const val METADATA_FILENAME = "SFA-version-metadata.json"
+        // ViPhooN: обновления берём из собственного репозитория, а не из
+        // upstream SagerNet/sing-box — иначе пользователям прилетали чужие
+        // релизы SFA, которые ставились поверх ViPhooN.
+        private const val RELEASES_URL = "https://api.github.com/repos/makcuk111/viphoon-android/releases"
+        private const val METADATA_FILENAME = "ViPhooN-version-metadata.json"
     }
 
     private val client = Libbox.newHTTPClient().apply {
@@ -34,7 +37,7 @@ class GitHubUpdateChecker : Closeable {
                 continue
             }
             val metadata = runCatching { downloadMetadata(release) }.getOrNull() ?: continue
-            if (!isNewerThanCurrent(metadata.versionName)) {
+            if (!isNewerThanCurrent(metadata)) {
                 continue
             }
             val currentBest = selected
@@ -47,11 +50,15 @@ class GitHubUpdateChecker : Closeable {
         val metadata = selected.metadata
 
         val isLegacy = Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-        val apkAsset = release.assets.find { asset ->
+        val candidates = release.assets.filter { asset ->
             asset.name.endsWith(".apk") &&
                 !asset.name.contains("play") &&
                 asset.name.contains("legacy-android-5") == isLegacy
         }
+        // Сначала APK под ABI устройства, затем universal, затем что есть.
+        val apkAsset = Build.SUPPORTED_ABIS.firstNotNullOfOrNull { abi ->
+            candidates.find { it.name.contains(abi) }
+        } ?: candidates.find { it.name.contains("universal") } ?: candidates.firstOrNull()
 
         return UpdateInfo(
             versionCode = metadata.versionCode,
@@ -86,7 +93,12 @@ class GitHubUpdateChecker : Closeable {
         }
     }
 
-    private fun isNewerThanCurrent(versionName: String): Boolean = Libbox.compareSemver(versionName, BuildConfig.VERSION_NAME)
+    // Обновление предлагается только если И semver новее, И versionCode больше
+    // установленного — иначе при совпадающих alpha-версиях (или кривых тегах)
+    // предлагалось «обновление» на ту же или более старую сборку.
+    private fun isNewerThanCurrent(metadata: VersionMetadata): Boolean =
+        metadata.versionCode > BuildConfig.VERSION_CODE &&
+            Libbox.compareSemver(metadata.versionName, BuildConfig.VERSION_NAME)
 
     private fun isBetterVersion(version: VersionMetadata, other: VersionMetadata): Boolean {
         if (Libbox.compareSemver(version.versionName, other.versionName)) {

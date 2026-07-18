@@ -131,6 +131,11 @@ object Settings {
     // задаётся перетаскиванием в списке локаций.
     var viphoonNodeOrder by dataStore.string(SettingsKey.VIPHOON_NODE_ORDER) { "" }
 
+    // Управление VPN по блокировке экрана (как в Insy): разрывать туннель
+    // при блокировке и/или автоматически восстанавливать после разблокировки.
+    var viphoonScreenLockDisconnect by dataStore.boolean(SettingsKey.VIPHOON_SCREEN_LOCK_DISCONNECT) { false }
+    var viphoonScreenUnlockReconnect by dataStore.boolean(SettingsKey.VIPHOON_SCREEN_UNLOCK_RECONNECT) { true }
+
     var privilegeSettingsEnabled by dataStore.boolean(SettingsKey.PRIVILEGE_SETTINGS_ENABLED) { false }
     var privilegeSettingsList by dataStore.stringSet(SettingsKey.PRIVILEGE_SETTINGS_LIST) { emptySet() }
     var privilegeSettingsInterfaceRenameEnabled by dataStore.boolean(

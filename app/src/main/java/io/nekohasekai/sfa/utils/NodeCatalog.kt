@@ -7,7 +7,10 @@ import java.io.File
 // эмодзи-флаг, чистое имя и офлайн-каталог нод из конфига подписки
 // (чтобы выбор локации работал и при выключенном VPN).
 object NodeCatalog {
-    data class Node(val tag: String, val type: String)
+    // server/serverPort — адрес сервера для офлайн-проверки пинга (TCP/ICMP
+    // без поднятого VPN). Для xhttp-нод (socks-мост на 127.0.0.1) реальный
+    // адрес подтягивается из конфига mihomo.
+    data class Node(val tag: String, val type: String, val server: String? = null, val serverPort: Int = 0)
 
     data class Catalog(val selectorTag: String, val nodes: List<Node>)
 
@@ -79,13 +82,25 @@ object NodeCatalog {
         val json = JSONObject(File(path).readText())
         val outbounds = json.getJSONArray("outbounds")
         val typeByTag = HashMap<String, String>()
+        val endpointByTag = HashMap<String, Pair<String, Int>>()
         var selectorTag: String? = null
         var selectorList: List<String> = emptyList()
+        // Реальные адреса xhttp-нод (в sing-box они socks на 127.0.0.1).
+        val bridgeEndpoints by lazy { MihomoBridge.proxyEndpoints() }
         for (i in 0 until outbounds.length()) {
             val ob = outbounds.getJSONObject(i)
             val tag = ob.optString("tag")
             val type = ob.optString("type")
-            if (tag.isNotEmpty()) typeByTag[tag] = type
+            if (tag.isNotEmpty()) {
+                typeByTag[tag] = type
+                val server = ob.optString("server")
+                val port = ob.optInt("server_port", 0)
+                if (server == "127.0.0.1" && port >= MihomoBridge.SOCKS_BASE) {
+                    bridgeEndpoints[tag]?.let { endpointByTag[tag] = it }
+                } else if (server.isNotEmpty() && port > 0) {
+                    endpointByTag[tag] = server to port
+                }
+            }
             if (selectorTag == null && type == "selector") {
                 selectorTag = tag
                 val arr = ob.optJSONArray("outbounds")
@@ -112,7 +127,10 @@ object NodeCatalog {
                 addAll((0 until arr.length()).map { arr.getString(it) })
             }
         }
-        val nodes = seen.map { Node(it, typeByTag[it] ?: "") }
+        val nodes = seen.map {
+            val endpoint = endpointByTag[it]
+            Node(it, typeByTag[it] ?: "", endpoint?.first, endpoint?.second ?: 0)
+        }
         if (nodes.isEmpty()) return null
         Catalog(mainTag, nodes)
     }.getOrNull()

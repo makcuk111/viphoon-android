@@ -33,6 +33,18 @@
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
+    <!-- Запасной путь для OEM-прошивок, игнорирующих QUERY_ALL_PACKAGES:
+         без этого списки приложений (маршрутизация по приложениям) пустые. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+        </intent>
+    </queries>
+
     <application
         android:name=".Application"
         android:allowBackup="true"

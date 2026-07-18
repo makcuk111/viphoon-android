@@ -61,6 +61,25 @@ object MihomoBridge {
         runCatching { configFile.delete() }
     }
 
+    // Реальные адреса xhttp-нод из конфига моста: в sing-box-конфиге такие
+    // ноды выглядят как socks на 127.0.0.1, что бесполезно для проверки
+    // пинга. Имя mihomo-прокси совпадает с тегом sing-box-аутбаунда.
+    fun proxyEndpoints(): Map<String, Pair<String, Int>> = runCatching {
+        val cfg = JSONObject(configFile.readText())
+        val proxies = cfg.optJSONArray("proxies") ?: return@runCatching emptyMap<String, Pair<String, Int>>()
+        val map = HashMap<String, Pair<String, Int>>()
+        for (i in 0 until proxies.length()) {
+            val p = proxies.optJSONObject(i) ?: continue
+            val name = p.optString("name")
+            val server = p.optString("server")
+            val port = p.optInt("port", 0)
+            if (name.isNotEmpty() && server.isNotEmpty() && port > 0) {
+                map[name] = server to port
+            }
+        }
+        map
+    }.getOrDefault(emptyMap())
+
     @Synchronized
     fun start() {
         stop()

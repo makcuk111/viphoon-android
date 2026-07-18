@@ -407,7 +407,7 @@ fun AppSettingsScreen(
                         showDownloadDialog = false
                     } catch (e: Exception) {
                         Log.e("AppSettingsScreen", "Error downloading update", e)
-                        downloadError = e.message
+                        downloadError = io.nekohasekai.sfa.update.friendlyUpdateError(e)
                     }
                 }
             },

@@ -206,8 +206,10 @@ fun HomeScreen(
     }
 
     if (showNodeSheet) {
-        val rows = remember(mainGroup, catalog, storedNode, nodeOrder) {
-            buildNodeRows(mainGroup, catalog, storedNode, nodeOrder)
+        val offlinePings by homeViewModel.offlinePings.collectAsState()
+        val pingRunning by homeViewModel.pingRunning.collectAsState()
+        val rows = remember(mainGroup, catalog, storedNode, nodeOrder, offlinePings) {
+            buildNodeRows(mainGroup, catalog, storedNode, nodeOrder, offlinePings)
         }
         // Локальный порядок нод на время открытого списка: перетаскивание
         // меняет его сразу, в настройки сохраняем при закрытии списка.
@@ -223,9 +225,13 @@ fun HomeScreen(
             )
         }
         // Автозапуск проверки пинга при открытии списка локаций.
+        // При поднятом VPN — urlTest через ядро, без VPN — прямой TCP/ICMP
+        // до серверов из офлайн-каталога.
         LaunchedEffect(online) {
             if (online) {
                 mainGroup?.let { groupsViewModel.urlTest(it.tag) }
+            } else {
+                homeViewModel.testOfflinePings()
             }
         }
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -251,8 +257,23 @@ fun HomeScreen(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f),
                     )
-                    if (online) {
-                        IconButton(onClick = { mainGroup?.let { groupsViewModel.urlTest(it.tag) } }) {
+                    if (!online && pingRunning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.size(14.dp))
+                    } else {
+                        IconButton(
+                            onClick = {
+                                if (online) {
+                                    mainGroup?.let { groupsViewModel.urlTest(it.tag) }
+                                } else {
+                                    homeViewModel.testOfflinePings()
+                                }
+                            },
+                        ) {
                             Icon(
                                 imageVector = Icons.Filled.Speed,
                                 contentDescription = "Проверить пинг",
@@ -260,15 +281,6 @@ fun HomeScreen(
                             )
                         }
                     }
-                }
-                if (!online) {
-                    Text(
-                        text = "VPN выключен — пинг появится после подключения",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                    )
-                    Spacer(Modifier.height(4.dp))
                 }
                 Text(
                     text = "Долгое нажатие — изменить порядок",
@@ -324,6 +336,7 @@ private fun buildNodeRows(
     catalog: NodeCatalog.Catalog?,
     storedNode: String,
     userOrder: List<String> = emptyList(),
+    offlinePings: Map<String, Int> = emptyMap(),
 ): List<NodeRow> {
     data class RawNode(val tag: String, val type: String, val delay: Int)
 
@@ -335,15 +348,17 @@ private fun buildNodeRows(
             .map { RawNode(it.tag, it.type, it.urlTestDelay) }
         selectedTag = mainGroup.selected
     } else if (catalog != null) {
-        raw = catalog.nodes.map { RawNode(it.tag, it.type, 0) }
+        // VPN выключен: показываем результаты офлайн-проверки (TCP/ICMP).
+        raw = catalog.nodes.map { RawNode(it.tag, it.type, offlinePings[it.tag] ?: 0) }
         selectedTag = storedNode
     } else {
         return emptyList()
     }
 
     // Если хоть у одной ноды есть результат теста, значит проверка выполнялась —
-    // ноды без результата считаем недоступными (N/A).
-    val anyTested = raw.any { it.delay > 0 }
+    // ноды без результата считаем недоступными (N/A). Отрицательная задержка
+    // (-1 из офлайн-проверки) — сервер проверен и недоступен.
+    val anyTested = raw.any { it.delay != 0 }
 
     val rows = raw.map { node ->
         val isAuto = NodeCatalog.isAuto(node.type)

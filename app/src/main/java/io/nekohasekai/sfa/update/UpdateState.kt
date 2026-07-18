@@ -61,6 +61,14 @@ object UpdateState {
             clearCache()
             return
         }
+        // Миграция: раньше апдейтер смотрел на upstream SagerNet/sing-box и мог
+        // закэшировать чужой релиз SFA — такой кэш сбрасываем.
+        if (info.downloadUrl.contains("SagerNet/sing-box") ||
+            info.releaseUrl.contains("SagerNet/sing-box")
+        ) {
+            clearCache()
+            return
+        }
 
         updateInfo.value = info
         hasUpdate.value = true

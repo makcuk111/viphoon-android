@@ -7,6 +7,9 @@ import io.nekohasekai.sfa.utils.NodeCatalog
 import io.nekohasekai.sfa.utils.SubscriptionInfo
 import io.nekohasekai.sfa.utils.SubscriptionInfoFetcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -103,4 +106,61 @@ class HomeViewModel : ViewModel() {
             Settings.viphoonNodeOrder = JSONArray(tags).toString()
         }
     }
+
+    // ── Офлайн-проверка пинга (без поднятого VPN) ──────────────────────────
+    // TCP-коннект до адреса сервера ноды, для UDP-протоколов (hysteria2)
+    // с фолбэком на ICMP. tag -> задержка в мс, -1 = недоступен.
+    private val _offlinePings = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val offlinePings = _offlinePings.asStateFlow()
+
+    private val _pingRunning = MutableStateFlow(false)
+    val pingRunning = _pingRunning.asStateFlow()
+
+    fun testOfflinePings() {
+        if (_pingRunning.value) return
+        val nodes = _catalog.value?.nodes
+            ?.filter { !NodeCatalog.isAuto(it.type) && !it.server.isNullOrBlank() && it.serverPort > 0 }
+            ?: return
+        if (nodes.isEmpty()) return
+        _pingRunning.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                coroutineScope {
+                    nodes.map { node ->
+                        async {
+                            val delay = measureEndpoint(node.server!!, node.serverPort)
+                            _offlinePings.value = _offlinePings.value + (node.tag to delay)
+                        }
+                    }.awaitAll()
+                }
+            } finally {
+                _pingRunning.value = false
+            }
+        }
+    }
+
+    private fun measureEndpoint(host: String, port: Int): Int {
+        // TCP: DNS + handshake. Для hysteria2 (UDP) порт по TCP обычно закрыт —
+        // тогда меряем ICMP до хоста.
+        tcpPing(host, port)?.let { return it }
+        return icmpPing(host) ?: -1
+    }
+
+    private fun tcpPing(host: String, port: Int, timeoutMs: Int = 3000): Int? = runCatching {
+        java.net.Socket().use { socket ->
+            val start = System.nanoTime()
+            socket.connect(java.net.InetSocketAddress(host, port), timeoutMs)
+            ((System.nanoTime() - start) / 1_000_000L).toInt().coerceAtLeast(1)
+        }
+    }.getOrNull()
+
+    private fun icmpPing(host: String, timeoutMs: Int = 2500): Int? = runCatching {
+        val address = java.net.InetAddress.getByName(host)
+        val start = System.nanoTime()
+        if (address.isReachable(timeoutMs)) {
+            ((System.nanoTime() - start) / 1_000_000L).toInt().coerceAtLeast(1)
+        } else {
+            null
+        }
+    }.getOrNull()
 }

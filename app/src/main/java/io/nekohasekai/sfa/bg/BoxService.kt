@@ -91,9 +91,68 @@ class BoxService(private val service: Service, private val platformInterface: Pl
                             serviceUpdateIdleMode()
                         }
                     }
+
+                    Intent.ACTION_SCREEN_OFF -> {
+                        handleScreenOff()
+                    }
+
+                    Intent.ACTION_SCREEN_ON -> {
+                        handleScreenUnlock(userPresent = false)
+                    }
+
+                    Intent.ACTION_USER_PRESENT -> {
+                        handleScreenUnlock(userPresent = true)
+                    }
                 }
             }
         }
+
+    // ── VPN по блокировке экрана (как в Insy) ─────────────────────────────
+    // При блокировке рвём туннель, но foreground-сервис оставляем живым:
+    // так ресивер переживает блокировку, а рестарт из фона не упирается в
+    // ограничения Android 12+ на запуск foreground-сервисов.
+    @Volatile
+    private var suspendedByScreenLock = false
+
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun handleScreenOff() {
+        if (!Settings.viphoonScreenLockDisconnect) return
+        if (status.value != Status.Started || suspendedByScreenLock) return
+        if (Settings.viphoonScreenUnlockReconnect) {
+            // Приостановка: закрываем туннель, сервис остаётся ждать разблокировки.
+            suspendedByScreenLock = true
+            GlobalScope.launch(Dispatchers.IO) {
+                runCatching {
+                    MihomoBridge.stop()
+                    closeService()
+                }
+                withContext(Dispatchers.Main) {
+                    notification.show(lastProfileName, "Приостановлено — экран заблокирован")
+                }
+            }
+        } else {
+            // Автоподключение выключено — просто полностью останавливаемся.
+            stopService()
+        }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun handleScreenUnlock(userPresent: Boolean) {
+        if (!suspendedByScreenLock) return
+        if (!userPresent) {
+            // Экран включился, но устройство может быть ещё заблокировано —
+            // ждём USER_PRESENT. Если экран блокировки не настроен, keyguard
+            // не активен и можно подключаться сразу.
+            if (Application.keyguardManager.isKeyguardLocked) return
+        }
+        suspendedByScreenLock = false
+        GlobalScope.launch(Dispatchers.IO) {
+            runCatching { serviceReload0() }
+            withContext(Dispatchers.Main) {
+                notification.show(lastProfileName, R.string.status_started)
+            }
+        }
+    }
 
     private fun startCommandServer() {
         val commandServer = CommandServer(this, platformInterface)
@@ -366,6 +425,9 @@ class BoxService(private val service: Service, private val platformInterface: Pl
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
                     }
+                    addAction(Intent.ACTION_SCREEN_OFF)
+                    addAction(Intent.ACTION_SCREEN_ON)
+                    addAction(Intent.ACTION_USER_PRESENT)
                 },
                 ContextCompat.RECEIVER_NOT_EXPORTED,
             )

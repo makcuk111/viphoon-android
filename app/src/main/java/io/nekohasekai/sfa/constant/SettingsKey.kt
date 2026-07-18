@@ -37,6 +37,8 @@ object SettingsKey {
     const val VIPHOON_APP_THEME = "viphoon_app_theme"
     const val VIPHOON_SELECTED_NODE = "viphoon_selected_node"
     const val VIPHOON_NODE_ORDER = "viphoon_node_order"
+    const val VIPHOON_SCREEN_LOCK_DISCONNECT = "viphoon_screen_lock_disconnect"
+    const val VIPHOON_SCREEN_UNLOCK_RECONNECT = "viphoon_screen_unlock_reconnect"
 
     const val PRIVILEGE_SETTINGS_ENABLED = "hide_settings_enabled"
     const val PRIVILEGE_SETTINGS_LIST = "hide_settings_list"

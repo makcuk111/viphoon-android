@@ -99,6 +99,25 @@ class ServiceNotification(private val status: MutableLiveData<Status>, private v
         )
     }
 
+    // Вариант с произвольным текстом (пауза VPN при блокировке экрана и т.п.).
+    fun show(lastProfileName: String, contentText: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Application.notification.createNotificationChannel(
+                NotificationChannel(
+                    notificationChannel,
+                    "Service Notifications",
+                    NotificationManager.IMPORTANCE_LOW,
+                ),
+            )
+        }
+        service.startForeground(
+            notificationId,
+            notificationBuilder
+                .setContentTitle(lastProfileName.takeIf { it.isNotBlank() } ?: "sing-box")
+                .setContentText(contentText).build(),
+        )
+    }
+
     suspend fun start() {
         if (Settings.dynamicNotification && checkPermission()) {
             commandClient.connect()

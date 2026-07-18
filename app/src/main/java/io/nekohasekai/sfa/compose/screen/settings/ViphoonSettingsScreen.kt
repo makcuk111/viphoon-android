@@ -91,6 +91,8 @@ fun ViphoonSettingsScreen(navController: NavController, serviceStatus: Status = 
     var newSite by remember { mutableStateOf("") }
     var appList by remember { mutableStateOf(Settings.viphoonAppList.toList().sorted()) }
     var showAppPicker by remember { mutableStateOf(false) }
+    var screenLockDisconnect by remember { mutableStateOf(Settings.viphoonScreenLockDisconnect) }
+    var screenUnlockReconnect by remember { mutableStateOf(Settings.viphoonScreenUnlockReconnect) }
 
     Column(
         modifier =
@@ -151,6 +153,32 @@ fun ViphoonSettingsScreen(navController: NavController, serviceStatus: Status = 
                         steps = 14,
                     )
                 }
+            }
+        }
+
+        SectionTitle("Экран и энергосбережение")
+
+        SettingsCard {
+            ToggleItem(
+                title = "Отключать при блокировке",
+                subtitle = "Разрывать VPN при блокировке экрана",
+                checked = screenLockDisconnect,
+                onCheckedChange = {
+                    screenLockDisconnect = it
+                    Settings.viphoonScreenLockDisconnect = it
+                    // Применяется на лету — перезапуск VPN не нужен.
+                },
+            )
+            if (screenLockDisconnect) {
+                ToggleItem(
+                    title = "Подключать при разблокировке",
+                    subtitle = "Автоматически переподключаться после разблокировки",
+                    checked = screenUnlockReconnect,
+                    onCheckedChange = {
+                        screenUnlockReconnect = it
+                        Settings.viphoonScreenUnlockReconnect = it
+                    },
+                )
             }
         }
 
@@ -324,6 +352,34 @@ fun ViphoonSettingsScreen(navController: NavController, serviceStatus: Status = 
 
 private data class AppEntry(val packageName: String, val label: String)
 
+// Список установленных приложений через PackageQueryManager (как в Per-App
+// Proxy): голый getInstalledApplications(0) на Android 11+ у части прошивок
+// возвращает пустой/урезанный список из-за package visibility. Оставляем
+// только приложения с доступом в интернет — остальным маршрутизация не нужна.
+private suspend fun loadInstalledApps(context: android.content.Context): List<AppEntry> = withContext(Dispatchers.IO) {
+    val pm = context.packageManager
+    val flags = android.content.pm.PackageManager.GET_PERMISSIONS
+    val packages = runCatching {
+        io.nekohasekai.sfa.vendor.PackageQueryManager.getInstalledPackages(flags, 0)
+    }.getOrElse {
+        @Suppress("DEPRECATION")
+        runCatching { pm.getInstalledPackages(flags) }.getOrDefault(emptyList())
+    }
+    packages
+        .asSequence()
+        .filter { it.packageName != context.packageName }
+        .filter { info ->
+            info.requestedPermissions?.contains(android.Manifest.permission.INTERNET) == true
+        }
+        .mapNotNull { info ->
+            val appInfo = info.applicationInfo ?: return@mapNotNull null
+            AppEntry(info.packageName, pm.getApplicationLabel(appInfo).toString())
+        }
+        .distinctBy { it.packageName }
+        .sortedBy { it.label.lowercase() }
+        .toList()
+}
+
 @Composable
 private fun AppPickerDialog(
     selected: Set<String>,
@@ -333,17 +389,13 @@ private fun AppPickerDialog(
 ) {
     val context = LocalContext.current
     var apps by remember { mutableStateOf<List<AppEntry>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
     var picked by remember { mutableStateOf(selected) }
     var query by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-        apps = withContext(Dispatchers.IO) {
-            val pm = context.packageManager
-            pm.getInstalledApplications(0)
-                .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
-                .map { AppEntry(it.packageName, pm.getApplicationLabel(it).toString()) }
-                .sortedBy { it.label.lowercase() }
-        }
+        apps = loadInstalledApps(context)
+        loading = false
     }
 
     val filtered = remember(apps, query) {
@@ -368,6 +420,25 @@ private fun AppPickerDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+                if (loading) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator()
+                    }
+                } else if (apps.isEmpty()) {
+                    Text(
+                        text = "Не удалось получить список приложений. " +
+                            "Разрешите приложению доступ к списку установленных программ " +
+                            "в настройках телефона (Разрешения → Список приложений).",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 16.dp),
+                    )
+                }
                 LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
                     items(filtered, key = { it.packageName }) { app ->
                         val on = picked.contains(app.packageName)
